@@ -227,7 +227,8 @@ goes on the list below.
     a `pg_trgm` index (and an indexable unaccent wrapper).
   - List size: the list currently returns every match, so it will need
     pagination or a result limit.
-  - Seeding: we'll need a script that generates realistic fake patients.
+  - Seeding: `npm run seed -- <count>` already generates fake patients;
+    it may need bulk inserts for millions of rows.
 
 **Product features**
 - **Import patients from CSV**, for practices moving over from spreadsheets

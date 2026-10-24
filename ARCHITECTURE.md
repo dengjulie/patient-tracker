@@ -31,7 +31,7 @@ patient-tracker/
 │   ├── create-user.js  admin script: create a provider account
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── index.js        Express routes + Zod validation
-│   └── seed.js         demo login + sample patients covering the edge cases
+│   └── seed.js         demo login + 5 edge-case patients + generated ones (Faker, fixed seed)
 └── client/             React front end
     ├── vite.config.js  proxies /api to Express (one origin, so cookies just work)
     └── src/
