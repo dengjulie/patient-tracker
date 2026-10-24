@@ -9,6 +9,11 @@ pg.types.setTypeParser(DATE_OID, (value) => value);
 
 export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
+// An idle connection can fail (e.g. Postgres restarts). Without a listener,
+// Node treats that as an unhandled error and crashes the whole API. The pool
+// already drops the broken connection and opens a new one when needed.
+pool.on('error', (err) => console.error('Idle database connection error:', err.message));
+
 const ALL_STATUS_CODES = [...STATUSES.map((s) => s.code), ENTERED_IN_ERROR];
 
 // Audit actions, after ASTM E2147: "query" is a search that showed patients.
