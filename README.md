@@ -4,7 +4,7 @@ A web app for healthcare providers to record and view patients' critical data:
 name, date of birth, status, and address. Patient data follows the
 [FHIR](https://hl7.org/fhir/) standard, and all access requires a login.
 
-**Status:** the backend (API, database, login) is complete and tested. The
+**Status:** the backend (API, database, login, audit log) is complete and tested. The
 React front end is in progress. See the build order in
 [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md#build-order).
 
@@ -81,6 +81,7 @@ patient-tracker/
 └── server/              Express API
     ├── index.js         routes and request validation (Zod)
     ├── db.js            schema and every SQL query
+    ├── audit.js         records audit log entries
     ├── auth.js          passwords, sessions, login/logout
     ├── constants.js     FHIR status codes and US states
     ├── seed.js          demo login and sample patients

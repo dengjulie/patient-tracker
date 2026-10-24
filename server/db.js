@@ -11,6 +11,9 @@ export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 const ALL_STATUS_CODES = [...STATUSES.map((s) => s.code), ENTERED_IN_ERROR];
 
+// Audit actions, after ASTM E2147: "query" is a search that showed patients.
+export const AUDIT_ACTIONS = ['create', 'update', 'delete', 'query', 'login', 'login_failed', 'logout'];
+
 // Creates the table if it doesn't exist yet. Called once at startup.
 // - One column per field keeps queries simple; the API speaks the nested,
 //   FHIR-shaped JSON, and toPatient/toRow translate between the two.
@@ -48,7 +51,47 @@ export async function initDb() {
       password_hash TEXT NOT NULL,
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    -- Who did what to which patients, and when (PRODUCT.md §7). Append-only:
+    -- the app never updates or deletes these rows. Holds patient ids, never
+    -- names or search terms.
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      user_id         INTEGER REFERENCES users (id),
+      action          TEXT NOT NULL CHECK (action IN (${AUDIT_ACTIONS.map((a) => `'${a}'`).join(', ')})),
+      patient_ids     INTEGER[] NOT NULL DEFAULT '{}',
+      attempted_email TEXT,
+      ip_address      TEXT
+    );
   `);
+}
+
+// Runs `work` inside a transaction: if anything in it throws, nothing it
+// wrote is saved. Used so a patient change and its audit entry succeed or
+// fail together.
+export async function transaction(work) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// `db` is the pool by default, or a transaction's client.
+export async function recordAudit({ userId, action, patientIds = [], attemptedEmail = null, ipAddress }, db = pool) {
+  await db.query(
+    `INSERT INTO audit_log (user_id, action, patient_ids, attempted_email, ip_address)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [userId, action, patientIds, attemptedEmail, ipAddress]
+  );
 }
 
 export async function createUser({ email, name, passwordHash }) {
@@ -146,9 +189,12 @@ export async function listPatients({ search = '', status = '' } = {}) {
   return rows.map(toPatient);
 }
 
-export async function createPatient(patient) {
+// The write functions below take an optional `db` (a transaction's client),
+// so routes can write the patient and its audit entry together.
+
+export async function createPatient(patient, db = pool) {
   const placeholders = COLUMNS.map((_, i) => `$${i + 1}`).join(', ');
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `INSERT INTO patients (${COLUMNS.join(', ')}) VALUES (${placeholders}) RETURNING *`,
     toRow(patient)
   );
@@ -156,9 +202,9 @@ export async function createPatient(patient) {
 }
 
 // Returns undefined if no patient has this id.
-export async function updatePatient(id, patient) {
+export async function updatePatient(id, patient, db = pool) {
   const assignments = COLUMNS.map((column, i) => `${column} = $${i + 1}`).join(', ');
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `UPDATE patients SET ${assignments}, updated_at = now()
      WHERE id = $${COLUMNS.length + 1} RETURNING *`,
     [...toRow(patient), id]
@@ -168,8 +214,8 @@ export async function updatePatient(id, patient) {
 
 // "Delete" never erases a medical record. It marks it as entered in error,
 // which hides it from the list (see PRODUCT.md §5).
-export async function markEnteredInError(id) {
-  const { rowCount } = await pool.query(
+export async function markEnteredInError(id, db = pool) {
+  const { rowCount } = await db.query(
     `UPDATE patients SET status = $1, updated_at = now() WHERE id = $2`,
     [ENTERED_IN_ERROR, id]
   );

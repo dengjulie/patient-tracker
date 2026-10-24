@@ -7,8 +7,10 @@ import {
   createPatient,
   updatePatient,
   markEnteredInError,
+  transaction,
 } from './db.js';
 import { sessions, requireAuth, login, logout, currentUser } from './auth.js';
+import { audit } from './audit.js';
 
 // One schema describes a valid patient, shaped like FHIR (see PRODUCT.md).
 // Each message is written to be shown directly under the matching form field.
@@ -94,13 +96,24 @@ const searchSchema = z.object({
 app.post('/api/patients/_search', async (req, res) => {
   const query = searchSchema.safeParse(req.body ?? {});
   if (!query.success) return res.status(400).json({ error: 'search and status must be strings' });
-  res.json(await listPatients(query.data));
+  const patients = await listPatients(query.data);
+  // Logged before responding: if the audit write fails, no results are sent.
+  await audit(req, 'query', { patientIds: patients.map((p) => p.id) });
+  res.json(patients);
 });
+
+// Each write and its audit entry run in one transaction, so a change is
+// never saved without its audit record.
 
 app.post('/api/patients', async (req, res) => {
   const data = validate(req.body, res);
   if (!data) return;
-  res.status(201).json(await createPatient(data));
+  const patient = await transaction(async (tx) => {
+    const created = await createPatient(data, tx);
+    await audit(req, 'create', { patientIds: [created.id] }, tx);
+    return created;
+  });
+  res.status(201).json(patient);
 });
 
 app.put('/api/patients/:id', async (req, res) => {
@@ -108,15 +121,34 @@ app.put('/api/patients/:id', async (req, res) => {
   if (!id) return res.status(404).json({ error: 'Patient not found' });
   const data = validate(req.body, res);
   if (!data) return;
-  const patient = await updatePatient(id, data);
+  const patient = await transaction(async (tx) => {
+    const updated = await updatePatient(id, data, tx);
+    if (updated) await audit(req, 'update', { patientIds: [id] }, tx);
+    return updated;
+  });
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   res.json(patient);
 });
 
 app.delete('/api/patients/:id', async (req, res) => {
   const id = parseId(req.params.id);
-  if (!id || !(await markEnteredInError(id))) return res.status(404).json({ error: 'Patient not found' });
+  if (!id) return res.status(404).json({ error: 'Patient not found' });
+  const found = await transaction(async (tx) => {
+    const marked = await markEnteredInError(id, tx);
+    if (marked) await audit(req, 'delete', { patientIds: [id] }, tx);
+    return marked;
+  });
+  if (!found) return res.status(404).json({ error: 'Patient not found' });
   res.status(204).end();
+});
+
+// Unexpected errors: log the stack trace (never the request body, which holds
+// PHI), and send a generic JSON message instead of Express's HTML error page.
+// Errors with a 4xx status, such as malformed JSON, keep their status.
+app.use((err, req, res, next) => {
+  const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+  if (status === 500) console.error(err.stack);
+  res.status(status).json({ error: status === 500 ? 'Something went wrong. Please try again.' : 'Invalid request' });
 });
 
 await initDb();

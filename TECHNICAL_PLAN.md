@@ -24,6 +24,7 @@ patient-tracker/
 ├── docker-compose.yml  local Postgres (host port 5433)
 ├── server/
 │   ├── .env.example    DATABASE_URL; copy to .env
+│   ├── audit.js        builds an audit entry from the request
 │   ├── auth.js         password hashing, sessions, login/logout, requireAuth
 │   ├── constants.js    status list (FHIR) and US state list
 │   ├── create-user.js  admin script: create a provider account
@@ -135,6 +136,8 @@ All routes except `/api/session` return `401` without a valid session.
   e.g. `"address.postalCode": "Use a 5-digit ZIP (or ZIP+4)"`. The form shows
   each message under the field with that path.
 - Unknown or non-numeric ids return `404`.
+- Unexpected errors return `500` with a generic JSON message. The stack trace
+  is logged; the request body never is, because it holds PHI.
 
 **Search**
 - **Search terms go in the request body, not the URL.** URLs are written to
@@ -178,6 +181,32 @@ All routes except `/api/session` return `401` without a valid session.
 - **Who sees what:** any logged-in provider sees all patients (PRODUCT.md §7),
   so `requireAuth` only checks that someone is logged in.
 
+## Audit log
+
+The design comes from PRODUCT.md §7. In code:
+
+- **Table:** `audit_log` (`occurred_at`, `user_id`, `action`, `patient_ids
+  INTEGER[]`, `attempted_email`, `ip_address`).
+  - Actions: `create`, `update`, `delete`, `query`, `login`, `login_failed`,
+    `logout`.
+- **Recording:** `audit(req, action, …)` in `audit.js` fills in the
+  logged-in user and IP address from the request.
+- **Writes are atomic:** each patient create/update/delete runs in
+  `transaction()` together with its audit insert. If the audit insert fails,
+  the patient change is rolled back too, so no change is ever saved without
+  its audit record.
+- **Searches fail closed:** the `query` entry, with the ids of every patient
+  in the results, is written *before* the response is sent. If it fails, the
+  provider gets a 500 and no results.
+- **Append-only:** the app has no code that updates or deletes audit rows.
+  Enforcing this in the database itself (revoking `UPDATE`/`DELETE`) is on
+  the Later list.
+- **Reviewing it:** for now, with SQL. For example, "who has seen patient 42?":
+  ```sql
+  SELECT occurred_at, user_id, action FROM audit_log
+  WHERE 42 = ANY(patient_ids) ORDER BY occurred_at;
+  ```
+
 Planned scale work and future features are tracked in
 [PRODUCT.md → Later](PRODUCT.md#later-post-mvp).
 
@@ -187,6 +216,6 @@ Planned scale work and future features are tracked in
 2. ✅ **Postgres**: switch from SQLite, Docker Compose setup
 3. ✅ **Search out of URLs**: `POST /api/patients/_search`
 4. ✅ **Login**: provider accounts (created by script), sessions, 15-minute idle logoff
-5. **Audit log**: record who viewed, created, edited or deleted which patient
+5. ✅ **Audit log**: record who viewed, created, edited or deleted which patient
 6. **Frontend**: login screen; patient table with debounced live search and status filter
 7. **Frontend**: add/edit modal form (inline errors) and delete with confirmation

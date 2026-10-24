@@ -198,7 +198,9 @@ ASTM E2147 standard).
 | --- | --- |
 | Create, edit, or delete (entered-in-error) a patient | Who, when, the action, the patient id |
 | **Search** | Who, when, and the **ids of every patient shown in the results**. A search reveals patients, so it counts as viewing them. |
-| Login success, login failure, logout | Who (or the email attempted), when, the IP address |
+| Login success, login failure, logout | Who (or the email attempted), when |
+
+Every entry also records the IP address of the request.
 
 - **Ids, not details:** entries hold patient ids, never names or search
   terms. That keeps the log's exposure small. It's still PHI, though (see

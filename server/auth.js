@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { pool, findUserByEmail } from './db.js';
+import { audit } from './audit.js';
 
 const scryptAsync = promisify(scrypt);
 const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
@@ -61,16 +62,23 @@ export async function login(req, res) {
 
   const user = await findUserByEmail(email.trim());
   const valid = await verifyPassword(password, user?.password_hash ?? DUMMY_HASH);
-  if (!user || !valid) return res.status(401).json({ error: 'Email or password is incorrect' });
+  if (!user || !valid) {
+    // The attempted email is kept so repeated failures against one account
+    // (or many accounts) show up in the audit log.
+    await audit(req, 'login_failed', { userId: user?.id, attemptedEmail: email.trim() });
+    return res.status(401).json({ error: 'Email or password is incorrect' });
+  }
 
   // A fresh session id on login, so an id issued before login can't be reused.
   await promisify(req.session.regenerate).call(req.session);
   req.session.user = { id: user.id, email: user.email, name: user.name };
+  await audit(req, 'login');
   res.json(req.session.user);
 }
 
 // DELETE /api/session: log out.
 export async function logout(req, res) {
+  if (req.session.user) await audit(req, 'logout');
   await promisify(req.session.destroy).call(req.session);
   res.clearCookie('connect.sid').status(204).end();
 }
