@@ -154,7 +154,7 @@ necessary" rule doesn't apply to providers accessing records for treatment
 | Access control | **Login required** for every page and API call. | Each person has their own account, so actions can be traced to them. |
 | Who can see what | **Every provider sees all patients in the practice.** | Matches how small practices share coverage (vacations, on-call). Per-provider lists would add ownership and transfers. |
 | Account creation | **Created by an admin (script); no sign-up page.** | Healthcare accounts are issued by the practice. Public sign-up would let anyone on the internet see patient data. Reviewers get a demo login. |
-| Automatic logoff | **Sessions end after 15 minutes of inactivity.** | Unattended screens in clinics are a common exposure. |
+| Automatic logoff | **Sessions end after 15 minutes of inactivity.** Anything typed in an unsaved form is **discarded**, not restored after logging back in. | Unattended screens in clinics are a common exposure. Restoring drafts would mean keeping unsaved patient data in the browser. |
 | Audit controls | **An audit log** of who viewed, created, edited or deleted which patient, and when. | Required to investigate who accessed a record. |
 | Data in URLs | **Search terms are sent in the request body, never the URL.** | URLs end up in logs and browser history; leaking names and birth dates through them is a common exposure. |
 | Shoulder surfing | **The list shows City, State only**; the full address appears when editing. | Shows what's needed to recognize a patient, nothing more. |
@@ -178,6 +178,13 @@ goes on the list below.
   - Seeding: we'll need a script that generates realistic fake patients.
 
 **Product features**
+- **Import patients from CSV**, for practices moving over from spreadsheets
+  or another system. Considerations:
+  - Validate every row with the same rules as the form, and show a per-row
+    error report instead of failing the whole file.
+  - Flag likely duplicates (same name + date of birth) before importing.
+  - Map spreadsheet columns to our fields (e.g. "DOB" → date of birth).
+  - Record the import in the audit log.
 - Column sorting and pagination
 - Multiple addresses per patient (home vs mailing) and address history, in a
   separate addresses table
