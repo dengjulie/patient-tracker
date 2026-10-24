@@ -8,7 +8,8 @@ libraries, few moving parts, and code a new reader can follow.
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Front end | **React** (Vite) | Widely known; fast dev server; almost no config. |
+| Front end | **React 19** (Vite) | Widely known; fast dev server; almost no config. |
+| UI components | **Mantine 9** | Every component we need (table, modal, searchable select, date input, notifications) from one library family. Its form library takes our API's dotted-path errors as-is. See [Why Mantine](#why-mantine). |
 | Back end | **Express 5** | The smallest well-known Node HTTP framework. v5 forwards errors from async handlers automatically. |
 | Database | **PostgreSQL 17** via `pg`, run with Docker Compose | Real `DATE` and list (`TEXT[]`) types; `unaccent` for accent-insensitive name search; `pg_trgm` indexes when we reach hospital scale. It's what production health systems run. |
 | Sessions | **express-session** + **connect-pg-simple** | The standard Express session library, with sessions stored in our existing Postgres (no Redis). |
@@ -31,7 +32,14 @@ patient-tracker/
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── index.js        Express routes + Zod validation
 │   └── seed.js         demo login + sample patients covering the edge cases
-└── client/             React front end (coming next)
+└── client/             React front end
+    ├── vite.config.js  proxies /api to Express (one origin, so cookies just work)
+    └── src/
+        ├── App.jsx           login page vs patients page; session-end messages
+        ├── LoginPage.jsx
+        ├── PatientsPage.jsx  table, debounced search, status filter
+        ├── api.js            every backend call; browser-side idle logoff
+        └── format.js         name/date/age display (no Date objects for DOBs)
 ```
 
 ## Data model: FHIR-shaped, not a FHIR server
@@ -319,6 +327,46 @@ The design comes from PRODUCT.md §7. In code:
   WHERE 42 = ANY(patient_ids) ORDER BY occurred_at;
   ```
 
+## Front end
+
+- **One origin:** in development, Vite proxies `/api` to Express, so the
+  browser sees a single origin. The session cookie works with
+  `sameSite: lax`, and no CORS setup is needed.
+- **One place for API calls:** every request goes through `api()` in
+  `api.js`.
+  - A `401` (the server ended the session) clears the screen and shows the
+    login page.
+- **Idle logoff in the browser too:** `api.js` runs the same 15-minute clock
+  as the server, reset on every request.
+  - When it runs out, the patients page is removed from the screen, so no
+    patient data and no unsaved form stays visible. The login page explains
+    why.
+  - Without it, the server would end the session but data would stay on
+    screen until the next click.
+- **Search:**
+  - **Debounced** by 300 ms (`useDebouncedValue`), which also keeps the audit
+    log to one entry per pause in typing, not per keystroke.
+  - **Out-of-order safe:** each new search cancels the previous request
+    (`AbortController`).
+  - **No separate loading flag:** each result is stored with the query it
+    answers, so "loading" is derived: the newest result is for an older
+    query. The previous rows stay visible meanwhile.
+- **Dates:** birth dates stay `YYYY-MM-DD` strings. Age and formatting use
+  plain numbers, never `Date`, so time zones can't shift them.
+
+### Why Mantine
+
+We compared Mantine, shadcn/ui (now on Base UI), MUI, React Aria Components,
+Chakra UI, and plain CSS.
+- **Mantine** gives the most finished UI for the least code we own.
+- **Its form library fits our API:** it accepts errors keyed by paths like
+  `address.city`, exactly the shape our API returns.
+- **Accessibility:** WCAG 2.1 AA is a real requirement for healthcare
+  organizations under HHS's 2024 Section 504 rule. Mantine follows the
+  WAI-ARIA patterns, and we check keyboard navigation as part of testing.
+- **Runner-up:** shadcn/ui, which would mean more copied code in the repo,
+  plus Tailwind.
+
 Planned scale work and future features are tracked in
 [PRODUCT.md → Later](PRODUCT.md#later-post-mvp).
 
@@ -329,5 +377,5 @@ Planned scale work and future features are tracked in
 3. ✅ **Search out of URLs**: `POST /api/patients/_search`
 4. ✅ **Login**: provider accounts (created by script), sessions, 15-minute idle logoff
 5. ✅ **Audit log**: record who viewed, created, edited or deleted which patient
-6. **Frontend**: login screen; patient table with debounced live search and status filter
+6. ✅ **Frontend**: login screen; patient table with debounced live search and status filter
 7. **Frontend**: add/edit modal form (inline errors) and delete with confirmation
