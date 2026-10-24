@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Center, Container, Group, Loader, Pagination, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { api } from './api.js';
-import { age, displayName, formatDate } from './format.js';
+import { age, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
 
 const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 25;
@@ -135,7 +135,7 @@ export default function PatientsPage({ user, onLogout }) {
         ) : (
           patients && (
             <Paper withBorder radius="md">
-              <Table.ScrollContainer minWidth={640}>
+              <Table.ScrollContainer minWidth={760}>
                 <Table striped highlightOnHover verticalSpacing="sm">
                   <Table.Thead>
                     <Table.Tr>
@@ -143,6 +143,7 @@ export default function PatientsPage({ user, onLogout }) {
                       <Table.Th>Date of birth</Table.Th>
                       <Table.Th>Status</Table.Th>
                       <Table.Th>City, State</Table.Th>
+                      <Table.Th>Updated</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -162,6 +163,11 @@ export default function PatientsPage({ user, onLogout }) {
                         </Table.Td>
                         <Table.Td>
                           {patient.address.city}, {patient.address.state}
+                        </Table.Td>
+                        <Table.Td c="dimmed" fz="sm">
+                          <time dateTime={patient.updatedAt} title={formatTimestamp(patient.updatedAt)}>
+                            {formatUpdated(patient.updatedAt)}
+                          </time>
                         </Table.Td>
                       </Table.Tr>
                     ))}

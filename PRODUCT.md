@@ -137,7 +137,10 @@ retention laws). A permanent delete also can't be undone after a misclick.
   small-practice tool, and seeing your patient list at a glance is expected
   (SimplePractice works the same way). Search-first, as in hospital EHRs, is
   on the Later list for hospital scale.
-- **Table columns:** Name · Date of birth (with age) · Status · City, State.
+- **Table columns:** Name · Date of birth (with age) · Status · City, State ·
+  Updated. "Updated" makes the sort order visible: recent changes read as
+  relative time ("3 hours ago", "yesterday"), older ones as a date ("Oct 12,
+  2026"), with the exact time on hover.
   The full address is stored, but shown only when you open a patient to edit.
   That limits what's visible over a provider's shoulder (see §7).
 - **Paging:** 25 patients per page, with numbered page buttons and

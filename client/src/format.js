@@ -13,6 +13,28 @@ export function formatDate(isoDate) {
   return `${month}/${day}/${year}`;
 }
 
+// When a record changed. Unlike birth dates, this is a moment in time, so a
+// Date is right here. Recent changes read as relative time ("3 hours ago");
+// after a week, a plain date is more useful.
+const relativeTime = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+export function formatUpdated(timestamp, now = new Date()) {
+  const elapsed = now - new Date(timestamp);
+  if (elapsed < MINUTE) return 'just now';
+  if (elapsed < HOUR) return relativeTime.format(-Math.floor(elapsed / MINUTE), 'minute');
+  if (elapsed < DAY) return relativeTime.format(-Math.floor(elapsed / HOUR), 'hour');
+  if (elapsed < 7 * DAY) return relativeTime.format(-Math.floor(elapsed / DAY), 'day');
+  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Full date and time, for the hover text.
+export function formatTimestamp(timestamp) {
+  return new Date(timestamp).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 // Whole years between the birth date and today.
 export function age(isoDate, today = new Date()) {
   const [year, month, day] = isoDate.split('-').map(Number);

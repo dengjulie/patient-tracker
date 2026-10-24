@@ -39,7 +39,7 @@ patient-tracker/
         ├── LoginPage.jsx
         ├── PatientsPage.jsx  table, debounced search, status filter
         ├── api.js            every backend call; browser-side idle logoff
-        └── format.js         name/date/age display (no Date objects for DOBs)
+        └── format.js         name/date/age/"updated" display (no Date objects for DOBs)
 ```
 
 ## Data model: FHIR-shaped, not a FHIR server
@@ -363,6 +363,8 @@ The design comes from PRODUCT.md §7. In code:
   effect or request.
 - **Dates:** birth dates stay `YYYY-MM-DD` strings. Age and formatting use
   plain numbers, never `Date`, so time zones can't shift them.
+  `updated_at` *is* a moment in time, so it's formatted with `Date` and the
+  browser's built-in `Intl.RelativeTimeFormat` (no date library).
 
 ### Why Mantine
 
