@@ -128,6 +128,11 @@ retention laws). A permanent delete also can't be undone after a misclick.
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
 - **Status filter:** a filter next to search.
+- **Sorted by most recently updated first.** New and just-edited patients
+  appear at the top, which suits day-to-day work ("who did we just
+  onboard?"). We considered alphabetical by last name, the convention in
+  clinical patient lists; search covers finding a specific patient by name.
+  Letting providers choose (column sorting) is on the Later list.
 - **A browsable table** of all patients, not search-only. This is a
   small-practice tool, and seeing your patient list at a glance is expected
   (SimplePractice works the same way). Search-first, as in hospital EHRs, is

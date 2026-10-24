@@ -41,6 +41,9 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- Matches the list's sort order, so a page can be read straight from the
+    -- index instead of sorting every patient.
+    CREATE INDEX IF NOT EXISTS patients_updated_at_idx ON patients (updated_at DESC, id DESC);
 
     -- Provider accounts. Created by script, never by sign-up (PRODUCT.md §7).
     -- Emails are stored lowercased so login is case-insensitive.
@@ -186,9 +189,9 @@ export async function listPatients({ search = '', status = '', page = 1, pageSiz
   const { rows } = await pool.query(
     `SELECT * FROM patients
      WHERE ${where}
-     -- Sort by family name; patients with only a given name sort by that.
-     -- id breaks ties, so the order is stable and no patient appears on two pages.
-     ORDER BY lower(COALESCE(NULLIF(family_name, ''), name_text)), name_text, id
+     -- Most recently updated first (PRODUCT.md §6). id breaks ties, so the
+     -- order is stable and no patient appears on two pages.
+     ORDER BY updated_at DESC, id DESC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, pageSize, (page - 1) * pageSize]
   );

@@ -170,7 +170,7 @@ convention); the API converts them to nested, FHIR-shaped JSON.
 | `city` | `TEXT` | not null | |
 | `state` | `TEXT` | not null | 2-letter code; the API checks it against the 59 US codes. |
 | `postal_code` | `TEXT` | not null | Text, so leading zeros survive (`02110`). |
-| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` | |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` | `updated_at` is set on every edit and drives the list's sort order (indexed with `id`). |
 
 - **Status check in the database:** the API validates the status, and the
   `CHECK` constraint backs it up, so the database itself rejects anything
@@ -233,8 +233,11 @@ code. It's listed so the whole database is documented in one place.
     local midnight, which can shift a birthday by a day across time zones.
   - We don't use Unix timestamps, for the same reason, and because they're
     negative for anyone born before 1970.
-- **Sort order:** family name, case-insensitive, falling back to the full name
-  for patients with only a given name.
+- **Sort order:** most recently updated first (`updated_at DESC, id DESC`),
+  backed by the `patients_updated_at_idx` index so a page is read straight
+  from the index. Seeded patients share one timestamp, so they fall back to
+  newest `id` first; the seed inserts the 5 edge cases last so they lead
+  page 1.
 - **No migrations tool.** Tables are created on startup if missing. While the
   schema is still changing in development, we reset with
   `docker compose down -v` and reseed.

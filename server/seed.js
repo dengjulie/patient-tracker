@@ -123,7 +123,9 @@ if (await findUserByEmail(DEMO_USER.email)) {
 if ((await listPatients()).total > 0) {
   console.log('Database already has patients; skipping seed.');
 } else {
-  const patients = [...samples, ...Array.from({ length: GENERATED_COUNT }, generatePatient)];
+  // Seeded rows share one updated_at, so the list (newest first, then highest
+  // id) shows the last inserted first. Edge cases go last so they lead page 1.
+  const patients = [...Array.from({ length: GENERATED_COUNT }, generatePatient), ...samples];
   // One transaction: much faster than committing each insert separately.
   await transaction(async (tx) => {
     for (const patient of patients) await createPatient(patient, tx);
