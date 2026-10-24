@@ -11,6 +11,8 @@ libraries, few moving parts, and code a new reader can follow.
 | Front end | **React** (Vite) | Widely known; fast dev server; almost no config. |
 | Back end | **Express 5** | The smallest well-known Node HTTP framework. v5 forwards errors from async handlers automatically. |
 | Database | **PostgreSQL 17** via `pg`, run with Docker Compose | Real `DATE` and list (`TEXT[]`) types; `unaccent` for accent-insensitive name search; `pg_trgm` indexes when we reach hospital scale. It's what production health systems run. |
+| Sessions | **express-session** + **connect-pg-simple** | The standard Express session library, with sessions stored in our existing Postgres (no Redis). |
+| Passwords | Node's built-in **scrypt** | A memory-hard password hash that ships with Node, so no extra dependency. |
 | Validation | **Zod** | Declares each field rule once, and produces readable per-field error messages. |
 
 ## Layout
@@ -22,7 +24,9 @@ patient-tracker/
 ├── docker-compose.yml  local Postgres (host port 5433)
 ├── server/
 │   ├── .env.example    DATABASE_URL; copy to .env
+│   ├── auth.js         password hashing, sessions, login/logout, requireAuth
 │   ├── constants.js    status list (FHIR) and US state list
+│   ├── create-user.js  admin script: create a provider account
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── index.js        Express routes + Zod validation
 │   └── seed.js         sample patients covering the edge cases
@@ -115,11 +119,16 @@ Postgres install.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| POST | `/api/session` | Log in with `{ email, password }`. Returns the user and sets the session cookie. |
+| GET | `/api/session` | The logged-in user, or `401`. The front end calls it on page load. |
+| DELETE | `/api/session` | Log out. Returns `204`. |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
 | POST | `/api/patients/_search` | List patients, excluding entered-in-error. Body: `{ "search": "maria", "status": "active" }` (both optional). A POST so patient details stay out of URLs (see below). |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. |
 | DELETE | `/api/patients/:id` | Sets status to `entered-in-error` (no row is erased). Returns `204`. |
+
+All routes except `/api/session` return `401` without a valid session.
 
 **Errors**
 - Validation failures return `400` with `{ "errors": { "<dotted.path>": "message" } }`,
@@ -139,6 +148,36 @@ Postgres install.
   *José Muñoz*.
 - `%` and `_` are escaped so they match literally rather than as wildcards.
 
+## Authentication
+
+- **Accounts:** a `users` table (email, name, password hash).
+  - Accounts are created with `npm run create-user -- <email> "<name>"`,
+    which prints a random temporary password once.
+  - `npm run seed` also creates the demo login `demo@example.com` /
+    `demo-password`.
+- **Passwords:** hashed with `scrypt` and a random 16-byte salt, stored as
+  `salt:hash`. They're checked with `timingSafeEqual`.
+- **Login failures:**
+  - A wrong email and a wrong password both return the same "Email or
+    password is incorrect".
+  - Both also take the same time: an unknown email is checked against a dummy
+    hash. Otherwise, response time would reveal which emails have accounts.
+- **Sessions:**
+  - Stored in Postgres (a `session` table, created automatically). The browser
+    only holds a cookie with the session id.
+  - The session id is regenerated on login, which prevents session fixation
+    (an attacker planting a known session id before the user logs in).
+- **Cookie settings:**
+  - `httpOnly`: page scripts can't read the cookie.
+  - `sameSite: lax`: other sites can't make requests using it.
+  - `secure` in production: sent only over HTTPS.
+  - Signed with `SESSION_SECRET`.
+- **Idle logoff:** `maxAge` is 15 minutes with `rolling: true`. Every request
+  pushes the expiry back to 15 minutes from now, so the session ends after 15
+  minutes of *inactivity*.
+- **Who sees what:** any logged-in provider sees all patients (PRODUCT.md §7),
+  so `requireAuth` only checks that someone is logged in.
+
 Planned scale work and future features are tracked in
 [PRODUCT.md → Later](PRODUCT.md#later-post-mvp).
 
@@ -147,7 +186,7 @@ Planned scale work and future features are tracked in
 1. ✅ **Backend**: schema, validation, REST API, seed data (tested with curl)
 2. ✅ **Postgres**: switch from SQLite, Docker Compose setup
 3. ✅ **Search out of URLs**: `POST /api/patients/_search`
-4. **Login**: provider accounts (created by script), sessions, 15-minute idle logoff
+4. ✅ **Login**: provider accounts (created by script), sessions, 15-minute idle logoff
 5. **Audit log**: record who viewed, created, edited or deleted which patient
 6. **Frontend**: login screen; patient table with debounced live search and status filter
 7. **Frontend**: add/edit modal form (inline errors) and delete with confirmation

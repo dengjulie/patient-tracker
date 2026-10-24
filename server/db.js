@@ -38,7 +38,30 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+
+    -- Provider accounts. Created by script, never by sign-up (PRODUCT.md §7).
+    -- Emails are stored lowercased so login is case-insensitive.
+    CREATE TABLE IF NOT EXISTS users (
+      id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      email         TEXT NOT NULL UNIQUE,
+      name          TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `);
+}
+
+export async function createUser({ email, name, passwordHash }) {
+  const { rows } = await pool.query(
+    `INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, name`,
+    [email.toLowerCase(), name, passwordHash]
+  );
+  return rows[0];
+}
+
+export async function findUserByEmail(email) {
+  const { rows } = await pool.query(`SELECT * FROM users WHERE email = $1`, [email.toLowerCase()]);
+  return rows[0];
 }
 
 // Row (flat, snake_case) -> patient (FHIR-shaped JSON).

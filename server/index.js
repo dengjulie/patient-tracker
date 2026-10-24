@@ -8,6 +8,7 @@ import {
   updatePatient,
   markEnteredInError,
 } from './db.js';
+import { sessions, requireAuth, login, logout, currentUser } from './auth.js';
 
 // One schema describes a valid patient, shaped like FHIR (see PRODUCT.md).
 // Each message is written to be shown directly under the matching form field.
@@ -67,6 +68,15 @@ const parseId = (param) => (/^\d{1,9}$/.test(param) ? Number(param) : undefined)
 
 const app = express();
 app.use(express.json());
+app.use(sessions);
+
+// Logging in and out are the only routes open without a session.
+app.post('/api/session', login);
+app.get('/api/session', currentUser);
+app.delete('/api/session', logout);
+
+// Everything else under /api requires a logged-in provider.
+app.use('/api', requireAuth);
 
 // Lists the form's dropdowns need, so the front end doesn't keep its own copy.
 app.get('/api/reference', (req, res) => {

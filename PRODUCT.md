@@ -200,7 +200,8 @@ goes on the list below.
 - Duplicate-patient warning when a new patient has the same name + DOB as an
   existing one
 - Restore a patient marked "entered in error"
-- Multi-factor authentication (MFA) and password reset
+- Multi-factor authentication (MFA), password change and reset
+- Login rate limiting and account lockout after repeated failed attempts
 - Roles and permissions (e.g. front desk vs clinician), "break the glass"
   access to restricted records, and an admin screen for accounts
 - Multiple practices in one app

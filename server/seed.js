@@ -1,7 +1,12 @@
-// Fills an empty database with sample patients for development. They cover
-// the name cases from PRODUCT.md §1: middle names, a suffix, a preferred
-// name, a prefix, and a patient with only one name.
-import { pool, initDb, listPatients, createPatient } from './db.js';
+// Fills an empty database with a demo login and sample patients for
+// development. The patients cover the name cases from PRODUCT.md §1: middle
+// names, a suffix, a preferred name, a prefix, and a patient with only one name.
+import { pool, initDb, listPatients, createPatient, createUser, findUserByEmail } from './db.js';
+import { hashPassword } from './auth.js';
+
+// A known password so reviewers can log in. Real accounts get a random one
+// from create-user.js.
+const DEMO_USER = { email: 'demo@example.com', name: 'Demo Provider', password: 'demo-password' };
 
 const address = (line, city, state, postalCode) => ({ line, city, state, postalCode });
 
@@ -44,6 +49,14 @@ const samples = [
 ];
 
 await initDb();
+
+if (await findUserByEmail(DEMO_USER.email)) {
+  console.log('Demo user already exists; skipping.');
+} else {
+  await createUser({ ...DEMO_USER, passwordHash: await hashPassword(DEMO_USER.password) });
+  console.log(`Created demo login: ${DEMO_USER.email} / ${DEMO_USER.password}`);
+}
+
 if ((await listPatients()).length > 0) {
   console.log('Database already has patients; skipping seed.');
 } else {
