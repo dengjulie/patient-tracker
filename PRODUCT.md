@@ -128,10 +128,13 @@ retention laws). A permanent delete also can't be undone after a misclick.
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
 - **Status filter:** a filter next to search.
+- **A browsable table** of all patients, not search-only. This is a
+  small-practice tool, and seeing your patient list at a glance is expected
+  (SimplePractice works the same way). Search-first, as in hospital EHRs, is
+  on the Later list for hospital scale.
 - **Table columns:** Name · Date of birth (with age) · Status · City, State.
   The full address is stored, but shown only when you open a patient to edit.
   That limits what's visible over a provider's shoulder (see §7).
-  *(Default; not yet confirmed.)*
 - **Search timing:** results update **as you type**, debounced (~300 ms after
   the last keystroke) so we don't send a request on every key. If an older
   response arrives after a newer one, it's ignored.
@@ -143,9 +146,36 @@ retention laws). A permanent delete also can't be undone after a misclick.
 **PRD said:** nothing. But this app holds health data, so HIPAA's Security
 Rule (45 CFR 164.312) sets the baseline.
 
-**Do we need to hide patient details from providers?** No. HIPAA's "minimum
-necessary" rule doesn't apply to providers accessing records for treatment
-(45 CFR 164.502(b)), which is why EHRs show full details to clinicians.
+**Do we need to hide patient details from providers?** No.
+- **HIPAA:** the "minimum necessary" rule doesn't apply to providers
+  accessing records for treatment (45 CFR 164.502(b)), which is why EHRs
+  show full details to clinicians.
+- **Safety:** masking would *hurt* patients. Staff confirm two identifiers
+  (name + date of birth) before treating someone, and a masked
+  `M**** G*****` makes it harder to tell similar patients apart.
+- **Where protection comes from:** controlling **who gets in and recording
+  what they do**, not hiding data from authorized users.
+
+**What counts as PHI here.** PHI (protected health information) is health
+information linked to an identifiable person. HIPAA lists 18 identifiers
+(45 CFR 164.514(b)(2)).
+
+| Data | PHI? | Why |
+| --- | --- | --- |
+| Patient name, date of birth, street, city, ZIP | **Yes** | All on HIPAA's identifier list (dates more specific than the year; areas smaller than a state). |
+| Patient status | **Yes**, alongside identity | Being a patient of a practice, and the state of care, is health information. |
+| Patient `id` | **Yes** | It works like a medical record number. |
+| State alone | No | State level is explicitly allowed. |
+| Provider name, email, IP address | PII, not PHI | Staff data. It needs protecting, but HIPAA's PHI rules don't cover it. |
+
+So almost all patient data is PHI, and so are **search terms** (names and
+birth dates) and **audit log entries** (patient ids). Rules that follow:
+- **Never log request bodies.** If request logging is added, it records only
+  method, path, status code and user.
+- **Seed data is fake** and must stay that way.
+- **The audit log is protected like patient data.**
+
+**What we build for the MVP:**
 
 **What we build for the MVP:**
 
@@ -155,9 +185,29 @@ necessary" rule doesn't apply to providers accessing records for treatment
 | Who can see what | **Every provider sees all patients in the practice.** | Matches how small practices share coverage (vacations, on-call). Per-provider lists would add ownership and transfers. |
 | Account creation | **Created by an admin (script); no sign-up page.** | Healthcare accounts are issued by the practice. Public sign-up would let anyone on the internet see patient data. Reviewers get a demo login. |
 | Automatic logoff | **Sessions end after 15 minutes of inactivity.** Anything typed in an unsaved form is **discarded**, not restored after logging back in. | Unattended screens in clinics are a common exposure. Restoring drafts would mean keeping unsaved patient data in the browser. |
-| Audit controls | **An audit log** of who viewed, created, edited or deleted which patient, and when. | Required to investigate who accessed a record. |
+| Audit controls | **An append-only audit log** (details below). | HIPAA requires it (164.312(b)), and it's how snooping, bad edits and breaches get investigated. |
 | Data in URLs | **Search terms are sent in the request body, never the URL.** | URLs end up in logs and browser history; leaking names and birth dates through them is a common exposure. |
 | Shoulder surfing | **The list shows City, State only**; the full address appears when editing. | Shows what's needed to recognize a patient, nothing more. |
+
+**The audit log.** HIPAA requires recording activity (164.312(b)) and
+regularly reviewing it (164.308(a)(1)(ii)(D)). It doesn't say what to log,
+so we follow the fields certified EHRs use (ONC 170.315(d)(2), based on the
+ASTM E2147 standard).
+
+| Event | What's recorded |
+| --- | --- |
+| Create, edit, or delete (entered-in-error) a patient | Who, when, the action, the patient id |
+| **Search** | Who, when, and the **ids of every patient shown in the results**. A search reveals patients, so it counts as viewing them. |
+| Login success, login failure, logout | Who (or the email attempted), when, the IP address |
+
+- **Ids, not details:** entries hold patient ids, never names or search
+  terms. That keeps the log's exposure small. It's still PHI, though (see
+  above).
+- **Append-only:** the app only ever adds entries; it has no code to change
+  or delete them.
+- **Reviewing it:** for the MVP, by querying the database. A review screen is
+  on the Later list. Since HIPAA requires regular review, it's a high
+  priority.
 
 ## MVP scope
 
@@ -185,6 +235,10 @@ goes on the list below.
   - Flag likely duplicates (same name + date of birth) before importing.
   - Map spreadsheet columns to our fields (e.g. "DOB" → date of birth).
   - Record the import in the audit log.
+- **Audit log review screen** (high priority: HIPAA requires regular
+  review), plus database-level append-only enforcement, before/after values
+  for edits, and a retention policy (commonly 6 years)
+- **Search-first at hospital scale:** no browse-all list, as in hospital EHRs
 - Column sorting and pagination
 - Multiple addresses per patient (home vs mailing) and address history, in a
   separate addresses table
