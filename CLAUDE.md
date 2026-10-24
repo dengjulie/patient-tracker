@@ -31,10 +31,8 @@ Instructions for Claude Code on this project. Product reasoning lives in
 
 ## Git
 - **One logical change per commit**, with a message that explains the why.
+- **Push after every commit**, so GitHub always matches local `main`.
 
 ## Running
-- Database: `docker compose up -d` (Postgres on port 5433)
-- Backend: `cd server && cp .env.example .env && npm install && npm run seed && npm run dev` (port 3001)
-- Demo login (created by seed): `demo@example.com` / `demo-password`
-- New provider account: `cd server && npm run create-user -- <email> "<name>"`
-- Frontend: *(coming next)*
+See [README.md](README.md) for setup, scripts, the demo login, and project
+structure. Keep it up to date when any of those change.
