@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Center, Container, Group, Loader, Pagination, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Anchor, Badge, Button, Center, Container, Group, Loader, Pagination, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
+import { notifications } from '@mantine/notifications';
 import { api } from './api.js';
 import { age, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
+import PatientForm from './PatientForm.jsx';
 
 const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 25;
@@ -20,7 +22,12 @@ const STATUS_COLORS = {
 };
 
 export default function PatientsPage({ user, onLogout }) {
-  const [statuses, setStatuses] = useState([]);
+  const [reference, setReference] = useState({ statuses: [], states: [] });
+  const { statuses } = reference;
+  // undefined = form closed, null = adding a patient, object = editing that patient
+  const [editing, setEditing] = useState(undefined);
+  // Bumped after a save or delete to reload the list, even if the query is unchanged.
+  const [refreshCount, setRefreshCount] = useState(0);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(null);
   // Wait until typing pauses before searching, so we don't send (and audit-log)
@@ -40,18 +47,19 @@ export default function PatientsPage({ user, onLogout }) {
   }
 
   const queryKey = JSON.stringify({ ...filters, page, pageSize: PAGE_SIZE });
+  const requestKey = `${refreshCount}|${queryKey}`;
 
-  // Each result remembers which query it answers. We're loading whenever the
-  // latest result is for an older query; the old rows stay visible meanwhile.
-  const [result, setResult] = useState({ queryKey: null, data: null, error: '' });
-  const loading = result.queryKey !== queryKey;
+  // Each result remembers which request it answers. We're loading whenever the
+  // latest result is for an older request; the old rows stay visible meanwhile.
+  const [result, setResult] = useState({ requestKey: null, data: null, error: '' });
+  const loading = result.requestKey !== requestKey;
   const { error } = result;
   const patients = result.data?.patients ?? null;
   const total = result.data?.total ?? 0;
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
   useEffect(() => {
-    api('GET', '/reference').then((reference) => setStatuses(reference.statuses));
+    api('GET', '/reference').then(setReference);
   }, []);
 
   useEffect(() => {
@@ -59,13 +67,32 @@ export default function PatientsPage({ user, onLogout }) {
     // response can never overwrite a newer one.
     const controller = new AbortController();
     api('POST', '/patients/_search', { body: JSON.parse(queryKey), signal: controller.signal })
-      .then((data) => setResult({ queryKey, data, error: '' }))
+      .then((data) => setResult({ requestKey, data, error: '' }))
       .catch((err) => {
         if (err.name === 'AbortError') return;
-        setResult((prev) => ({ ...prev, queryKey, error: "Couldn't load patients. Please try again." }));
+        setResult((prev) => ({ ...prev, requestKey, error: "Couldn't load patients. Please try again." }));
       });
     return () => controller.abort();
-  }, [queryKey]);
+  }, [requestKey, queryKey]);
+
+  // After a change, show page 1: the list is newest first, so that's where the
+  // added or edited patient now is.
+  function reloadFromFirstPage() {
+    setPageChoice({ filtersKey, page: 1 });
+    setRefreshCount((n) => n + 1);
+  }
+
+  function handleSaved(patient, isNew) {
+    setEditing(undefined);
+    notifications.show({ color: 'green', title: isNew ? 'Patient added' : 'Changes saved', message: displayName(patient) });
+    reloadFromFirstPage();
+  }
+
+  function handleDeleted(patient) {
+    setEditing(undefined);
+    notifications.show({ title: 'Patient deleted', message: `${displayName(patient)} was marked as entered in error.` });
+    reloadFromFirstPage();
+  }
 
   const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
   const filtering = Boolean(filters.search || filters.status);
@@ -94,8 +121,21 @@ export default function PatientsPage({ user, onLogout }) {
             <Button variant="default" size="xs" onClick={onLogout}>
               Log out
             </Button>
+            <Button onClick={() => setEditing(null)} disabled={!statuses.length}>
+              Add patient
+            </Button>
           </Group>
         </Group>
+
+        {editing !== undefined && (
+          <PatientForm
+            patient={editing}
+            reference={reference}
+            onClose={() => setEditing(undefined)}
+            onSaved={handleSaved}
+            onDeleted={handleDeleted}
+          />
+        )}
 
         <Group align="flex-end" grow preventGrowOverflow={false}>
           <TextInput
@@ -148,8 +188,14 @@ export default function PatientsPage({ user, onLogout }) {
                   </Table.Thead>
                   <Table.Tbody>
                     {patients.map((patient) => (
-                      <Table.Tr key={patient.id}>
-                        <Table.Td fw={500}>{displayName(patient)}</Table.Td>
+                      // The whole row opens the patient for mouse users; the name is a
+                      // real button so keyboard and screen-reader users can too.
+                      <Table.Tr key={patient.id} onClick={() => setEditing(patient)} style={{ cursor: 'pointer' }}>
+                        <Table.Td>
+                          <Anchor component="button" type="button" fw={500} c="inherit" onClick={() => setEditing(patient)}>
+                            {displayName(patient)}
+                          </Anchor>
+                        </Table.Td>
                         <Table.Td>
                           {formatDate(patient.birthDate)}{' '}
                           <Text span c="dimmed" size="sm">

@@ -148,6 +148,25 @@ retention laws). A permanent delete also can't be undone after a misclick.
   to page 1. Paging happens on the server, so the browser never loads the
   whole patient list. That keeps it fast at hospital scale and means only
   the patients actually shown are recorded as viewed in the audit log.
+- **Adding and editing:** an "Add patient" button, or click a patient's name
+  (a real button, so it works from the keyboard).
+  - **Name labels:** "First (given) name", "Middle name(s)" and "Last (family)
+    name": familiar words, with the FHIR meaning in brackets. Under the last
+    name: "Leave blank if the patient has only one name."
+  - **Status:** each option shows its one-line meaning; new patients default
+    to Planned.
+  - **State:** a searchable dropdown ("CA — California").
+  - **Errors:** shown under the field they belong to.
+  - **No autofill:** the browser and password managers can't fill the
+    provider's own name or address into a patient's record.
+  - **Accidental closing:** clicking outside the modal doesn't close it, so a
+    stray click can't throw away what was typed.
+  - **After saving,** a notification confirms it and the list jumps to page 1,
+    where the patient now sits at the top.
+- **Deleting:** from the edit form, with a confirmation that says when to use
+  it: "Use this only for records created by mistake… If care has ended, set
+  the status to Finished instead." This steers providers away from deleting
+  discharged patients.
 - **Search timing:** results update **as you type**, debounced (~300 ms after
   the last keystroke) so we don't send a request on every key. If an older
   response arrives after a newer one, it's ignored.
@@ -254,6 +273,7 @@ goes on the list below.
 - **Audit log review screen** (high priority: HIPAA requires regular
   review), plus database-level append-only enforcement, before/after values
   for edits, and a retention policy (commonly 6 years)
+- Warn before closing the form with unsaved changes
 - **Search-first at hospital scale:** no browse-all list, as in hospital EHRs
 - Column sorting
 - Multiple addresses per patient (home vs mailing) and address history, in a

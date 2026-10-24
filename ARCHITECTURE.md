@@ -37,7 +37,8 @@ patient-tracker/
     └── src/
         ├── App.jsx           login page vs patients page; session-end messages
         ├── LoginPage.jsx
-        ├── PatientsPage.jsx  table, debounced search, status filter
+        ├── PatientsPage.jsx  table, debounced search, status filter, paging
+        ├── PatientForm.jsx   add/edit modal, delete confirmation
         ├── api.js            every backend call; browser-side idle logoff
         └── format.js         name/date/age/"updated" display (no Date objects for DOBs)
 ```
@@ -357,6 +358,21 @@ The design comes from PRODUCT.md §7. In code:
   - **No separate loading flag:** each result is stored with the query it
     answers, so "loading" is derived: the newest result is for an older
     query. The previous rows stay visible meanwhile.
+- **Add/edit form** (`PatientForm.jsx`, `@mantine/form`):
+  - **Familiar fields, FHIR payload:** the form uses first/middle and
+    street/unit fields; `toFormValues` / `toPayload` convert to and from the
+    API's `name.given[]` and `address.line[]`. The first name stays whole
+    ("Mary Ann"); middle names split on spaces.
+  - **One set of validation rules:** the client doesn't validate. Server
+    errors (`{ "address.postalCode": "…" }`) go straight into
+    `form.setErrors`, with a small map for the few paths that differ
+    (`name.given` → the first-name field).
+  - **No autofill:** every field sets `autoComplete="off"` plus
+    `data-1p-ignore` / `data-lpignore`, so the browser and password
+    managers don't fill the *provider's* name or address into a patient
+    record. 1Password did exactly that in testing before this was added.
+  - **After a save or delete,** a refresh counter reloads the list from page
+    1, where the changed patient now appears (newest first).
 - **Paging:** the page number is stored with the filters it was chosen for,
   so a new search or status filter goes back to page 1 without an extra
   effect or request.
@@ -389,4 +405,4 @@ Planned scale work and future features are tracked in
 4. ✅ **Login**: provider accounts (created by script), sessions, 15-minute idle logoff
 5. ✅ **Audit log**: record who viewed, created, edited or deleted which patient
 6. ✅ **Frontend**: login screen; patient table with debounced live search and status filter
-7. **Frontend**: add/edit modal form (inline errors) and delete with confirmation
+7. ✅ **Frontend**: add/edit modal form (inline errors) and delete with confirmation

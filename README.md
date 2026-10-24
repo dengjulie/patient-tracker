@@ -4,9 +4,9 @@ A web app for healthcare providers to record and view patients' critical data:
 name, date of birth, status, and address. Patient data follows the
 [FHIR](https://hl7.org/fhir/) standard, and all access requires a login.
 
-**Status:** login and the patient list (search + status filter) work end to
-end. Adding, editing and deleting patients from the UI is next. See the build
-order in
+**Status:** the MVP is complete: log in, then add, view, search, filter,
+page through, edit and delete patients, with every action audit-logged. See
+the build order in
 [ARCHITECTURE.md](ARCHITECTURE.md#build-order).
 
 ## Docs
@@ -101,7 +101,8 @@ patient-tracker/
         ├── main.jsx         entry point, Mantine theme provider
         ├── App.jsx          login page vs patients page; session-end messages
         ├── LoginPage.jsx    login form
-        ├── PatientsPage.jsx patient table, search, status filter
+        ├── PatientsPage.jsx patient table, search, status filter, paging
+        ├── PatientForm.jsx  add/edit modal and delete confirmation
         ├── api.js           every backend call; browser-side idle logoff
         └── format.js        name, date and age formatting
 ```
