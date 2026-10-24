@@ -9,7 +9,9 @@
 import {
   fakerEN_US, fakerES_MX, fakerVI, fakerPT_BR, fakerFR, fakerPL, fakerTR,
 } from '@faker-js/faker';
-import { pool, initDb, listPatients, createPatient, createUser, findUserByEmail, transaction } from './db.js';
+import {
+  pool, initDb, listPatients, createPatient, setPatientTimestamps, createUser, findUserByEmail, transaction,
+} from './db.js';
 import { hashPassword } from './auth.js';
 
 const GENERATED_COUNT = Number(process.argv[2] ?? 250);
@@ -111,6 +113,23 @@ function generatePatient() {
   };
 }
 
+// Spread history over time so the list (newest first) looks like real use.
+// The edge cases changed in the last few hours, so they lead page 1;
+// generated patients were added in the past 2 years and last updated
+// before yesterday.
+const HOUR = 60 * 60 * 1000;
+
+function edgeCaseHistory(index) {
+  const updatedAt = new Date(Date.now() - (index + 1) * HOUR);
+  return { createdAt: new Date(updatedAt - 30 * 24 * HOUR), updatedAt };
+}
+
+function generatedHistory() {
+  const createdAt = f.date.past({ years: 2 });
+  const updatedAt = f.date.between({ from: createdAt, to: Date.now() - 24 * HOUR });
+  return { createdAt, updatedAt: updatedAt < createdAt ? createdAt : updatedAt };
+}
+
 await initDb();
 
 if (await findUserByEmail(DEMO_USER.email)) {
@@ -123,12 +142,13 @@ if (await findUserByEmail(DEMO_USER.email)) {
 if ((await listPatients()).total > 0) {
   console.log('Database already has patients; skipping seed.');
 } else {
-  // Seeded rows share one updated_at, so the list (newest first, then highest
-  // id) shows the last inserted first. Edge cases go last so they lead page 1.
-  const patients = [...Array.from({ length: GENERATED_COUNT }, generatePatient), ...samples];
+  const patients = [...samples, ...Array.from({ length: GENERATED_COUNT }, generatePatient)];
   // One transaction: much faster than committing each insert separately.
   await transaction(async (tx) => {
-    for (const patient of patients) await createPatient(patient, tx);
+    for (const [i, patient] of patients.entries()) {
+      const created = await createPatient(patient, tx);
+      await setPatientTimestamps(created.id, i < samples.length ? edgeCaseHistory(i) : generatedHistory(), tx);
+    }
   });
   console.log(`Seeded ${patients.length} patients (${samples.length} edge cases + ${GENERATED_COUNT} generated).`);
 }

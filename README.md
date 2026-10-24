@@ -71,7 +71,7 @@ All endpoints are listed in [ARCHITECTURE.md → API](ARCHITECTURE.md#api).
 | --- | --- |
 | `npm run dev` | Start the API and restart it on file changes. |
 | `npm start` | Start the API. |
-| `npm run seed` | Create the demo login, 5 hand-written edge-case patients and 250 generated ones (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
+| `npm run seed` | Create the demo login, 5 hand-written edge-case patients and 250 generated ones with realistic history spread over two years (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
 | `npm run create-user -- <email> "<name>"` | Create a provider account and print a temporary password. There's no sign-up page by design ([PRODUCT.md §7](PRODUCT.md#7-security-and-privacy)). |
 
 To reset the database: `docker compose down -v && docker compose up -d`, then

@@ -235,9 +235,8 @@ code. It's listed so the whole database is documented in one place.
     negative for anyone born before 1970.
 - **Sort order:** most recently updated first (`updated_at DESC, id DESC`),
   backed by the `patients_updated_at_idx` index so a page is read straight
-  from the index. Seeded patients share one timestamp, so they fall back to
-  newest `id` first; the seed inserts the 5 edge cases last so they lead
-  page 1.
+  from the index. The seed spreads fake patients' `created_at`/`updated_at`
+  over two years (edge cases: the last few hours, so they lead page 1).
 - **No migrations tool.** Tables are created on startup if missing. While the
   schema is still changing in development, we reset with
   `docker compose down -v` and reseed.

@@ -226,6 +226,12 @@ export async function updatePatient(id, patient, db = pool) {
   return toPatient(rows[0]);
 }
 
+// Only seed.js uses this, to spread fake patients' history over time so the
+// demo list (sorted by updated_at) looks like real use.
+export async function setPatientTimestamps(id, { createdAt, updatedAt }, db = pool) {
+  await db.query(`UPDATE patients SET created_at = $1, updated_at = $2 WHERE id = $3`, [createdAt, updatedAt, id]);
+}
+
 // "Delete" never erases a medical record. It marks it as entered in error,
 // which hides it from the list (see PRODUCT.md §5).
 export async function markEnteredInError(id, db = pool) {
