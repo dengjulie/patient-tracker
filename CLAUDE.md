@@ -1,0 +1,37 @@
+# CLAUDE.md
+
+Instructions for Claude Code on this project. Product reasoning lives in
+[PRODUCT.md](PRODUCT.md); architecture in [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md).
+
+## How we work
+- **I make the product decisions.** When a choice affects what users see or
+  what data we store, stop and ask me. Give options with a recommendation and
+  the trade-offs. Don't decide silently.
+- **Question the requirements.** The PRD is a starting point. When an
+  established standard (FHIR, US Core) or a widely used product already solves
+  the problem, bring that up, even if it means changing the PRD.
+- **Build in small pieces.** Do one piece at a time, then explain what was
+  built and why, so I understand every line before we move on.
+- **Record every decision.** Product decisions go in PRODUCT.md with their
+  reasoning. Deferred ideas go in its "Later" list, not in the code.
+
+## Code
+- **Do the minimum the requirements need.** No speculative endpoints,
+  abstractions or config. Simple, well-known libraries over custom code.
+- **Write for readers.** Clear names, small functions, and comments that
+  explain *why*, not *what*.
+- **UX matters as much as correctness.** Error messages are written for the
+  provider, not the developer. The front end shows the API's validation
+  messages as they are.
+
+## Verify before calling it done
+- **Test the API against a running server**, including error paths. Test UI
+  changes in the browser.
+- **Report failures honestly**, along with the fix.
+
+## Git
+- **One logical change per commit**, with a message that explains the why.
+
+## Running
+- Backend: `cd server && npm install && npm run seed && npm run dev` (port 3001)
+- Frontend: *(added in piece 2)*
