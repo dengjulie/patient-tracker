@@ -91,15 +91,20 @@ app.get('/api/reference', (req, res) => {
 const searchSchema = z.object({
   search: z.string().trim().default(''),
   status: z.string().default(''),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(25),
 });
 
 app.post('/api/patients/_search', async (req, res) => {
   const query = searchSchema.safeParse(req.body ?? {});
-  if (!query.success) return res.status(400).json({ error: 'search and status must be strings' });
-  const patients = await listPatients(query.data);
+  if (!query.success) {
+    return res.status(400).json({ error: 'search and status must be strings; page and pageSize (max 100) positive integers' });
+  }
+  const { patients, total } = await listPatients(query.data);
   // Logged before responding: if the audit write fails, no results are sent.
+  // Only the patients on this page were shown, so only they are logged.
   await audit(req, 'query', { patientIds: patients.map((p) => p.id) });
-  res.json(patients);
+  res.json({ patients, total, page: query.data.page, pageSize: query.data.pageSize });
 });
 
 // Each write and its audit entry run in one transaction, so a change is

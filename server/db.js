@@ -162,7 +162,8 @@ const COLUMNS = [
 const SEARCHABLE = `unaccent(name_text || ' ' || preferred_name || ' ' ||
   to_char(birth_date, 'YYYY-MM-DD') || ' ' || to_char(birth_date, 'MM/DD/YYYY'))`;
 
-export async function listPatients({ search = '', status = '' } = {}) {
+// Returns one page of matching patients plus the total number of matches.
+export async function listPatients({ search = '', status = '', page = 1, pageSize = 25 } = {}) {
   const params = [ENTERED_IN_ERROR];
   const conditions = ['status <> $1'];
 
@@ -179,14 +180,19 @@ export async function listPatients({ search = '', status = '' } = {}) {
     conditions.push(`${SEARCHABLE} ILIKE unaccent($${params.length})`);
   }
 
+  const where = conditions.join(' AND ');
+  const { rows: countRows } = await pool.query(`SELECT count(*)::int AS total FROM patients WHERE ${where}`, params);
+
   const { rows } = await pool.query(
     `SELECT * FROM patients
-     WHERE ${conditions.join(' AND ')}
+     WHERE ${where}
      -- Sort by family name; patients with only a given name sort by that.
-     ORDER BY lower(COALESCE(NULLIF(family_name, ''), name_text)), name_text`,
-    params
+     -- id breaks ties, so the order is stable and no patient appears on two pages.
+     ORDER BY lower(COALESCE(NULLIF(family_name, ''), name_text)), name_text, id
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, pageSize, (page - 1) * pageSize]
   );
-  return rows.map(toPatient);
+  return { patients: rows.map(toPatient), total: countRows[0].total };
 }
 
 // The write functions below take an optional `db` (a transaction's client),

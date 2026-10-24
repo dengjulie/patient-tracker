@@ -120,7 +120,7 @@ if (await findUserByEmail(DEMO_USER.email)) {
   console.log(`Created demo login: ${DEMO_USER.email} / ${DEMO_USER.password}`);
 }
 
-if ((await listPatients()).length > 0) {
+if ((await listPatients()).total > 0) {
   console.log('Database already has patients; skipping seed.');
 } else {
   const patients = [...samples, ...Array.from({ length: GENERATED_COUNT }, generatePatient)];

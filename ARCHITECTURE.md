@@ -247,7 +247,7 @@ code. It's listed so the whole database is documented in one place.
 | GET | `/api/session` | The logged-in user, or `401`. The front end calls it on page load. |
 | DELETE | `/api/session` | Log out. Returns `204`. |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
-| POST | `/api/patients/_search` | List patients, excluding entered-in-error. Body: `{ "search": "maria", "status": "active" }` (both optional). A POST so patient details stay out of URLs (see below). |
+| POST | `/api/patients/_search` | One page of patients, excluding entered-in-error. Body (all optional): `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }` (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. |
 | DELETE | `/api/patients/:id` | Sets status to `entered-in-error` (no row is erased). Returns `204`. |
@@ -273,6 +273,10 @@ All routes except `/api/session` return `401` without a valid session.
 - Matching ignores case and accents (`ILIKE` + `unaccent`): "jose munoz" finds
   *José Muñoz*.
 - `%` and `_` are escaped so they match literally rather than as wildcards.
+- **Paging:** `LIMIT`/`OFFSET` plus a separate `count(*)` for the total.
+  - `id` is the last sort key, so the order is stable and no patient appears
+    on two pages. Tested by walking all pages.
+  - The audit entry lists only the patients on the returned page.
 
 ## Authentication
 
@@ -351,6 +355,9 @@ The design comes from PRODUCT.md §7. In code:
   - **No separate loading flag:** each result is stored with the query it
     answers, so "loading" is derived: the newest result is for an older
     query. The previous rows stay visible meanwhile.
+- **Paging:** the page number is stored with the filters it was chosen for,
+  so a new search or status filter goes back to page 1 without an extra
+  effect or request.
 - **Dates:** birth dates stay `YYYY-MM-DD` strings. Age and formatting use
   plain numbers, never `Date`, so time zones can't shift them.
 

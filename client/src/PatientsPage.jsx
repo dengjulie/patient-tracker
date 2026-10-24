@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Center, Container, Group, Loader, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Center, Container, Group, Loader, Pagination, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { api } from './api.js';
 import { age, displayName, formatDate } from './format.js';
 
 const SEARCH_DELAY_MS = 300;
+const PAGE_SIZE = 25;
+
+// Screen-reader names for the pagination arrows.
+const PAGINATION_LABELS = { first: 'First page', previous: 'Previous page', next: 'Next page', last: 'Last page' };
 
 const STATUS_COLORS = {
   planned: 'blue',
@@ -22,14 +26,29 @@ export default function PatientsPage({ user, onLogout }) {
   // Wait until typing pauses before searching, so we don't send (and audit-log)
   // a request on every keystroke.
   const [debouncedSearch] = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
-  const query = { search: debouncedSearch, status: status ?? '' };
-  const queryKey = JSON.stringify(query);
+  const filters = { search: debouncedSearch, status: status ?? '' };
+  const filtersKey = JSON.stringify(filters);
+
+  // The page number remembers which filters it was chosen for, so changing
+  // the search or status filter goes back to page 1 automatically.
+  const [pageChoice, setPageChoice] = useState({ filtersKey, page: 1 });
+  const page = pageChoice.filtersKey === filtersKey ? pageChoice.page : 1;
+
+  function goToPage(newPage) {
+    setPageChoice({ filtersKey, page: newPage });
+    window.scrollTo({ top: 0 });
+  }
+
+  const queryKey = JSON.stringify({ ...filters, page, pageSize: PAGE_SIZE });
 
   // Each result remembers which query it answers. We're loading whenever the
   // latest result is for an older query; the old rows stay visible meanwhile.
-  const [result, setResult] = useState({ queryKey: null, patients: null, error: '' });
+  const [result, setResult] = useState({ queryKey: null, data: null, error: '' });
   const loading = result.queryKey !== queryKey;
-  const { patients, error } = result;
+  const { error } = result;
+  const patients = result.data?.patients ?? null;
+  const total = result.data?.total ?? 0;
+  const pageCount = Math.ceil(total / PAGE_SIZE);
 
   useEffect(() => {
     api('GET', '/reference').then((reference) => setStatuses(reference.statuses));
@@ -40,7 +59,7 @@ export default function PatientsPage({ user, onLogout }) {
     // response can never overwrite a newer one.
     const controller = new AbortController();
     api('POST', '/patients/_search', { body: JSON.parse(queryKey), signal: controller.signal })
-      .then((found) => setResult({ queryKey, patients: found, error: '' }))
+      .then((data) => setResult({ queryKey, data, error: '' }))
       .catch((err) => {
         if (err.name === 'AbortError') return;
         setResult((prev) => ({ ...prev, queryKey, error: "Couldn't load patients. Please try again." }));
@@ -49,7 +68,9 @@ export default function PatientsPage({ user, onLogout }) {
   }, [queryKey]);
 
   const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
-  const filtering = Boolean(query.search || query.status);
+  const filtering = Boolean(filters.search || filters.status);
+  const firstShown = (page - 1) * PAGE_SIZE + 1;
+  const lastShown = firstShown + (patients?.length ?? 0) - 1;
 
   return (
     <Container size="lg" py="xl">
@@ -61,7 +82,7 @@ export default function PatientsPage({ user, onLogout }) {
             </Title>
             {patients && (
               <Text c="dimmed" size="sm">
-                {patients.length} {patients.length === 1 ? 'patient' : 'patients'}
+                {total} {total === 1 ? 'patient' : 'patients'}
                 {filtering && ' found'}
               </Text>
             )}
@@ -149,6 +170,22 @@ export default function PatientsPage({ user, onLogout }) {
               </Table.ScrollContainer>
             </Paper>
           )
+        )}
+
+        {pageCount > 1 && patients?.length > 0 && (
+          <Group justify="space-between">
+            <Text size="sm" c="dimmed">
+              Showing {firstShown}–{lastShown} of {total}
+            </Text>
+            <Pagination
+              total={pageCount}
+              value={page}
+              onChange={goToPage}
+              withEdges
+              getControlProps={(control) => ({ 'aria-label': PAGINATION_LABELS[control] })}
+              getItemProps={(item) => ({ 'aria-label': `Page ${item}` })}
+            />
+          </Group>
         )}
       </Stack>
     </Container>

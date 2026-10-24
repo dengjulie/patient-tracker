@@ -135,6 +135,11 @@ retention laws). A permanent delete also can't be undone after a misclick.
 - **Table columns:** Name · Date of birth (with age) · Status · City, State.
   The full address is stored, but shown only when you open a patient to edit.
   That limits what's visible over a provider's shoulder (see §7).
+- **Paging:** 25 patients per page, with numbered page buttons and
+  "Showing 26–50 of 255". Changing the search or the status filter goes back
+  to page 1. Paging happens on the server, so the browser never loads the
+  whole patient list. That keeps it fast at hospital scale and means only
+  the patients actually shown are recorded as viewed in the audit log.
 - **Search timing:** results update **as you type**, debounced (~300 ms after
   the last keystroke) so we don't send a request on every key. If an older
   response arrives after a newer one, it's ignored.
@@ -225,8 +230,8 @@ goes on the list below.
   millions of patients, as in large health systems) and check:
   - Search speed: `ILIKE '%word%'` scans the whole table, so we'll likely need
     a `pg_trgm` index (and an indexable unaccent wrapper).
-  - List size: the list currently returns every match, so it will need
-    pagination or a result limit.
+  - Page queries: `OFFSET` gets slower on deep pages of very large tables;
+    keyset ("seek") pagination may be needed.
   - Seeding: `npm run seed -- <count>` already generates fake patients;
     it may need bulk inserts for millions of rows.
 
@@ -242,7 +247,7 @@ goes on the list below.
   review), plus database-level append-only enforcement, before/after values
   for edits, and a retention policy (commonly 6 years)
 - **Search-first at hospital scale:** no browse-all list, as in hospital EHRs
-- Column sorting and pagination
+- Column sorting
 - Multiple addresses per patient (home vs mailing) and address history, in a
   separate addresses table
 - Address verification against USPS data, to standardize "St" vs "Street"
