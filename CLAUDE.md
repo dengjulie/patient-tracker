@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Instructions for Claude Code on this project. Product reasoning lives in
-[PRODUCT.md](PRODUCT.md); architecture in [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md).
+[PRODUCT.md](PRODUCT.md); architecture in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## How we work
 - **I make the product decisions.** When a choice affects what users see or
@@ -14,6 +14,8 @@ Instructions for Claude Code on this project. Product reasoning lives in
   built and why, so I understand every line before we move on.
 - **Record every decision.** Product decisions go in PRODUCT.md with their
   reasoning. Deferred ideas go in its "Later" list, not in the code.
+- **Keep ARCHITECTURE.md in sync.** When the schema, API or auth changes,
+  update its matching section in the same commit.
 
 ## Code
 - **Do the minimum the requirements need.** No speculative endpoints,

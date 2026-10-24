@@ -1,4 +1,4 @@
-# Patient Tracker: Technical Plan
+# Patient Tracker: Architecture
 
 How the product decisions in [PRODUCT.md](PRODUCT.md) are built.
 The guiding rule is **the simplest thing that's correct**: well-known
@@ -20,18 +20,18 @@ libraries, few moving parts, and code a new reader can follow.
 ```
 patient-tracker/
 ├── PRODUCT.md          product decisions and reasoning
-├── TECHNICAL_PLAN.md   this file
+├── ARCHITECTURE.md    this file
 ├── docker-compose.yml  local Postgres (host port 5433)
 ├── server/
-│   ├── .env.example    DATABASE_URL; copy to .env
+│   ├── .env.example    DATABASE_URL, SESSION_SECRET; copy to .env
 │   ├── audit.js        builds an audit entry from the request
 │   ├── auth.js         password hashing, sessions, login/logout, requireAuth
 │   ├── constants.js    status list (FHIR) and US state list
 │   ├── create-user.js  admin script: create a provider account
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── index.js        Express routes + Zod validation
-│   └── seed.js         sample patients covering the edge cases
-└── client/             (piece 2)
+│   └── seed.js         demo login + sample patients covering the edge cases
+└── client/             React front end (coming next)
 ```
 
 ## Data model: FHIR-shaped, not a FHIR server
@@ -90,30 +90,145 @@ switched because three product decisions need what Postgres has built in:
 The cost is that reviewers need Docker (`docker compose up -d`) or a local
 Postgres install.
 
-- **One flat `patients` table**, one column per field, in `snake_case`
-  (the Postgres convention).
-  - `given_names` is `TEXT[]`, a native Postgres list.
-  - `name_text` (the full display name) is stored so search can match it.
-  - The address is stored in full as five columns: line 1, line 2, city,
-    state, postal code. Epic's reporting database stores the patient's
-    current address the same way. A separate addresses table (for multiple
-    addresses or history, as in OpenMRS/FHIR) is on the Later list.
+## Schema
+
+[`db.js`](server/db.js) (`initDb`) is the source of truth; this section
+explains it. **Update this section whenever the schema changes.**
+
+```mermaid
+erDiagram
+    users ||--o{ audit_log : "performs"
+    patients }o--o{ audit_log : "appears in (patient_ids[])"
+
+    patients {
+        integer id PK
+        text name_prefix
+        text_array given_names
+        text family_name
+        text name_suffix
+        text name_text "computed display name"
+        text preferred_name
+        date birth_date
+        text status "CHECK: FHIR codes"
+        text address_line1
+        text address_line2
+        text city
+        text state
+        text postal_code
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    users {
+        integer id PK
+        text email UK "lowercased"
+        text name
+        text password_hash "scrypt salt:hash"
+        timestamptz created_at
+    }
+    audit_log {
+        bigint id PK
+        timestamptz occurred_at
+        integer user_id FK
+        text action "CHECK: 7 actions"
+        integer_array patient_ids
+        text attempted_email
+        text ip_address
+    }
+    session {
+        varchar sid PK
+        json sess "contains the logged-in user"
+        timestamp expire
+    }
+```
+
+### `patients`
+
+One row per patient. Columns are flat and `snake_case` (the Postgres
+convention); the API converts them to nested, FHIR-shaped JSON.
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | `INTEGER` | PK, identity | Works like a medical record number, so it's PHI. |
+| `name_prefix` | `TEXT` | not null, default `''` | FHIR `name.prefix` (Dr., Mx.). |
+| `given_names` | `TEXT[]` | not null, default `{}` | FHIR `name.given`: first and middle names, in order. |
+| `family_name` | `TEXT` | not null, default `''` | FHIR `name.family`. Empty for patients with only one name. |
+| `name_suffix` | `TEXT` | not null, default `''` | FHIR `name.suffix` (Jr., III). |
+| `name_text` | `TEXT` | not null | FHIR `name.text`: the full display name, **computed by the server** and stored so search can match it. |
+| `preferred_name` | `TEXT` | not null, default `''` | FHIR name with `use = usual`. |
+| `birth_date` | `DATE` | not null | Returned as `YYYY-MM-DD` text (see Conventions). |
+| `status` | `TEXT` | not null, `CHECK` in FHIR codes | `planned`, `waitlist`, `active`, `onhold`, `finished`, `cancelled`, `entered-in-error`. |
+| `address_line1` | `TEXT` | not null | Street. |
+| `address_line2` | `TEXT` | not null, default `''` | Apt / unit. |
+| `city` | `TEXT` | not null | |
+| `state` | `TEXT` | not null | 2-letter code; the API checks it against the 59 US codes. |
+| `postal_code` | `TEXT` | not null | Text, so leading zeros survive (`02110`). |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` | |
+
+- **Status check in the database:** the API validates the status, and the
+  `CHECK` constraint backs it up, so the database itself rejects anything
+  else.
+- **Rows are never deleted:** "delete" sets `status = 'entered-in-error'`.
+- **The address is stored in full** as five columns, the way Epic's
+  reporting database stores a patient's current address. A separate
+  addresses table (multiple addresses, history) is on the Later list.
+
+### `users`
+
+Provider accounts, created by `create-user.js` (no sign-up).
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | `INTEGER` | PK, identity | |
+| `email` | `TEXT` | not null, unique | Stored lowercased, so login ignores case. |
+| `name` | `TEXT` | not null | |
+| `password_hash` | `TEXT` | not null | `salt:hash` from scrypt. Never returned by the API. |
+| `created_at` | `TIMESTAMPTZ` | not null, default `now()` | |
+
+### `audit_log`
+
+Append-only record of patient access and logins (PRODUCT.md §7). Holds patient
+ids, never names or search terms.
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | `BIGINT` | PK, identity | `BIGINT` because this table grows fastest. |
+| `occurred_at` | `TIMESTAMPTZ` | not null, default `now()` | |
+| `user_id` | `INTEGER` | FK → `users.id`, nullable | Null only for a failed login with an unknown email. |
+| `action` | `TEXT` | not null, `CHECK` | `create`, `update`, `delete`, `query`, `login`, `login_failed`, `logout`. |
+| `patient_ids` | `INTEGER[]` | not null, default `{}` | Every patient the action touched or showed. |
+| `attempted_email` | `TEXT` | nullable | Failed logins only. |
+| `ip_address` | `TEXT` | nullable | From the request. |
+
+- **No foreign key on `patient_ids`:** Postgres can't enforce foreign keys on
+  items inside a list. This is safe because patient rows are never deleted,
+  so the ids always stay valid.
+
+### `session`
+
+Created and managed by **connect-pg-simple** (the session store), not by our
+code. It's listed so the whole database is documented in one place.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `sid` | `VARCHAR` PK | The session id held in the browser's cookie. |
+| `sess` | `JSON` | Session data, including the logged-in user (`id`, `email`, `name`). |
+| `expire` | `TIMESTAMP` | Indexed. Pushed 15 minutes ahead on every request (idle logoff). Expired rows are removed automatically. |
+
+### Conventions
+
 - **Translation:** `toPatient` / `toRow` in `db.js` convert between flat
   `snake_case` rows and the nested camelCase JSON. This is the only
   translation layer.
-- **Status constraint:** a `CHECK` constraint on `status` means the database
-  itself rejects invalid codes, as a backstop behind the API's own check.
 - **Dates:**
   - `birth_date` is a `DATE`. `pg` is told to return it as a plain
     `YYYY-MM-DD` string. Its default turns it into a JavaScript `Date` at
     local midnight, which can shift a birthday by a day across time zones.
   - We don't use Unix timestamps, for the same reason, and because they're
     negative for anyone born before 1970.
-  - `created_at` / `updated_at` are `TIMESTAMPTZ`.
 - **Sort order:** family name, case-insensitive, falling back to the full name
   for patients with only a given name.
-- **No migrations tool.** The table is created on startup if missing. While
-  the schema is still changing in development, we reset with
+- **No migrations tool.** Tables are created on startup if missing. While the
+  schema is still changing in development, we reset with
   `docker compose down -v` and reseed.
 
 ## API
@@ -153,7 +268,7 @@ All routes except `/api/session` return `401` without a valid session.
 
 ## Authentication
 
-- **Accounts:** a `users` table (email, name, password hash).
+- **Accounts:** the [`users`](#users) table.
   - Accounts are created with `npm run create-user -- <email> "<name>"`,
     which prints a random temporary password once.
   - `npm run seed` also creates the demo login `demo@example.com` /
@@ -166,8 +281,8 @@ All routes except `/api/session` return `401` without a valid session.
   - Both also take the same time: an unknown email is checked against a dummy
     hash. Otherwise, response time would reveal which emails have accounts.
 - **Sessions:**
-  - Stored in Postgres (a `session` table, created automatically). The browser
-    only holds a cookie with the session id.
+  - Stored in Postgres (the [`session`](#session) table). The browser only
+    holds a cookie with the session id.
   - The session id is regenerated on login, which prevents session fixation
     (an attacker planting a known session id before the user logs in).
 - **Cookie settings:**
@@ -185,10 +300,7 @@ All routes except `/api/session` return `401` without a valid session.
 
 The design comes from PRODUCT.md §7. In code:
 
-- **Table:** `audit_log` (`occurred_at`, `user_id`, `action`, `patient_ids
-  INTEGER[]`, `attempted_email`, `ip_address`).
-  - Actions: `create`, `update`, `delete`, `query`, `login`, `login_failed`,
-    `logout`.
+- **Table:** see [Schema → `audit_log`](#audit_log).
 - **Recording:** `audit(req, action, …)` in `audit.js` fills in the
   logged-in user and IP address from the request.
 - **Writes are atomic:** each patient create/update/delete runs in

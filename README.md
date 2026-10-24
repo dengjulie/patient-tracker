@@ -6,14 +6,14 @@ name, date of birth, status, and address. Patient data follows the
 
 **Status:** the backend (API, database, login, audit log) is complete and tested. The
 React front end is in progress. See the build order in
-[TECHNICAL_PLAN.md](TECHNICAL_PLAN.md#build-order).
+[ARCHITECTURE.md](ARCHITECTURE.md#build-order).
 
 ## Docs
 
 | Doc | What's in it |
 | --- | --- |
 | [PRODUCT.md](PRODUCT.md) | Every product decision and the reasoning behind it: where we followed FHIR over the original requirements, US-only addresses, HIPAA-driven security, MVP scope, and the post-MVP backlog. |
-| [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) | Stack choices, data model, database schema, API reference, authentication, and build order. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Stack choices, data model, **database schema** (with diagram), API reference, authentication, and build order. |
 | [CLAUDE.md](CLAUDE.md) | How this project was built with Claude Code: who makes decisions, code standards, verification. |
 
 ## Running locally
@@ -55,7 +55,7 @@ curl -b cookies.txt -X POST localhost:3001/api/patients/_search \
   -d '{"search":"maria"}'
 ```
 
-All endpoints are listed in [TECHNICAL_PLAN.md → API](TECHNICAL_PLAN.md#api).
+All endpoints are listed in [ARCHITECTURE.md → API](ARCHITECTURE.md#api).
 
 ### Scripts (run in `server/`)
 
@@ -75,7 +75,7 @@ To reset the database: `docker compose down -v && docker compose up -d`, then
 patient-tracker/
 ├── README.md            you are here
 ├── PRODUCT.md           product decisions and reasoning
-├── TECHNICAL_PLAN.md    architecture, schema, API
+├── ARCHITECTURE.md      stack, schema, API, auth, audit log
 ├── CLAUDE.md            instructions for Claude Code
 ├── docker-compose.yml   local Postgres
 └── server/              Express API
@@ -92,4 +92,4 @@ patient-tracker/
 ## Stack
 
 React (coming) · Express 5 · PostgreSQL 17 · Zod · express-session.
-Why each was chosen: [TECHNICAL_PLAN.md → Stack](TECHNICAL_PLAN.md#stack).
+Why each was chosen: [ARCHITECTURE.md → Stack](ARCHITECTURE.md#stack).
