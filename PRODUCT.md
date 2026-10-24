@@ -123,23 +123,47 @@ retention laws). A permanent delete also can't be undone after a misclick.
 - **Layout:** one screen, with a patient table and a modal form for adding and
   editing. The table stays in view while working.
 - **Search:** covers **names (including preferred name) and date of birth
-  only**.
+  only**. It ignores case and accents: "jose munoz" finds *José Muñoz*.
   - Typing "maria garcia" finds *Maria Elena Garcia*, because each word is
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
 - **Status filter:** a filter next to search.
 - **Table columns:** Name · Date of birth (with age) · Status · City, State.
-  The full address shows when editing. *(Default; not yet confirmed.)*
+  The full address is stored, but shown only when you open a patient to edit.
+  That limits what's visible over a provider's shoulder (see §7).
+  *(Default; not yet confirmed.)*
 - **Search timing:** results update **as you type**, debounced (~300 ms after
   the last keystroke) so we don't send a request on every key. If an older
   response arrives after a newer one, it's ignored.
 
 ---
 
+## 7. Security and privacy
+
+**PRD said:** nothing. But this app holds health data, so HIPAA's Security
+Rule (45 CFR 164.312) sets the baseline.
+
+**Do we need to hide patient details from providers?** No. HIPAA's "minimum
+necessary" rule doesn't apply to providers accessing records for treatment
+(45 CFR 164.502(b)), which is why EHRs show full details to clinicians.
+
+**What we build for the MVP:**
+
+| HIPAA safeguard | Decision | Why |
+| --- | --- | --- |
+| Access control | **Login required** for every page and API call. | Each person has their own account, so actions can be traced to them. |
+| Who can see what | **Every provider sees all patients in the practice.** | Matches how small practices share coverage (vacations, on-call). Per-provider lists would add ownership and transfers. |
+| Account creation | **Created by an admin (script); no sign-up page.** | Healthcare accounts are issued by the practice. Public sign-up would let anyone on the internet see patient data. Reviewers get a demo login. |
+| Automatic logoff | **Sessions end after 15 minutes of inactivity.** | Unattended screens in clinics are a common exposure. |
+| Audit controls | **An audit log** of who viewed, created, edited or deleted which patient, and when. | Required to investigate who accessed a record. |
+| Data in URLs | **Search terms are sent in the request body, never the URL.** | URLs end up in logs and browser history; leaking names and birth dates through them is a common exposure. |
+| Shoulder surfing | **The list shows City, State only**; the full address appears when editing. | Shows what's needed to recognize a patient, nothing more. |
+
 ## MVP scope
 
-The MVP is the **bare minimum** that meets the requirements with the decisions
-above: add, list, search/filter, edit, and delete patients. Everything else
+The MVP is the **bare minimum** code that meets the requirements with the
+decisions above: log in; add, list, search/filter, edit, and delete patients;
+and an audit log of those actions. Everything else
 goes on the list below.
 
 ## Later (post-MVP)
@@ -169,7 +193,11 @@ goes on the list below.
 - Duplicate-patient warning when a new patient has the same name + DOB as an
   existing one
 - Restore a patient marked "entered in error"
-- Authentication, and multiple providers/practices
+- Multi-factor authentication (MFA) and password reset
+- Roles and permissions (e.g. front desk vs clinician), "break the glass"
+  access to restricted records, and an admin screen for accounts
+- Multiple practices in one app
+- HTTPS and deployment (required in production for HIPAA transmission security)
 
 **Intentionally not doing** (unless the need changes)
 - International addresses and a country field (§3)

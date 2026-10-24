@@ -73,9 +73,18 @@ app.get('/api/reference', (req, res) => {
   res.json({ statuses: STATUSES, states: US_STATES });
 });
 
-app.get('/api/patients', async (req, res) => {
-  const { search = '', status = '' } = req.query;
-  res.json(await listPatients({ search: String(search).trim(), status: String(status) }));
+// Search is a POST so names and birth dates travel in the request body, not
+// the URL, where they'd end up in server logs and browser history.
+// FHIR does the same with POST [base]/Patient/_search.
+const searchSchema = z.object({
+  search: z.string().trim().default(''),
+  status: z.string().default(''),
+});
+
+app.post('/api/patients/_search', async (req, res) => {
+  const query = searchSchema.safeParse(req.body ?? {});
+  if (!query.success) return res.status(400).json({ error: 'search and status must be strings' });
+  res.json(await listPatients(query.data));
 });
 
 app.post('/api/patients', async (req, res) => {

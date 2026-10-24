@@ -116,7 +116,7 @@ Postgres install.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
-| GET | `/api/patients?search=&status=` | List patients, excluding entered-in-error. |
+| POST | `/api/patients/_search` | List patients, excluding entered-in-error. Body: `{ "search": "maria", "status": "active" }` (both optional). A POST so patient details stay out of URLs (see below). |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. |
 | DELETE | `/api/patients/:id` | Sets status to `entered-in-error` (no row is erased). Returns `204`. |
@@ -128,6 +128,10 @@ Postgres install.
 - Unknown or non-numeric ids return `404`.
 
 **Search**
+- **Search terms go in the request body, not the URL.** URLs are written to
+  server, proxy and monitoring logs. Names and birth dates there would leak
+  patient data. FHIR defines `POST [base]/Patient/_search` for the same
+  reason, and we borrow its path.
 - Search is done on the server. The query is split into words, and **every
   word** must appear in one of: the full name, the preferred name, or the
   birth date (ISO or MM/DD/YYYY).
@@ -142,5 +146,8 @@ Planned scale work and future features are tracked in
 
 1. ✅ **Backend**: schema, validation, REST API, seed data (tested with curl)
 2. ✅ **Postgres**: switch from SQLite, Docker Compose setup
-3. **Frontend**: patient table with debounced live search and status filter
-4. **Frontend**: add/edit modal form (inline errors) and delete with confirmation
+3. ✅ **Search out of URLs**: `POST /api/patients/_search`
+4. **Login**: provider accounts (created by script), sessions, 15-minute idle logoff
+5. **Audit log**: record who viewed, created, edited or deleted which patient
+6. **Frontend**: login screen; patient table with debounced live search and status filter
+7. **Frontend**: add/edit modal form (inline errors) and delete with confirmation
