@@ -1,144 +1,154 @@
-import Database from 'better-sqlite3';
+import pg from 'pg';
 import { STATUSES, ENTERED_IN_ERROR } from './constants.js';
 
-// The database is a single file next to this module. It's created on first run.
-const db = new Database(new URL('./patients.db', import.meta.url).pathname);
+// Return DATE columns as plain 'YYYY-MM-DD' strings. By default pg converts
+// them to JavaScript Dates at local midnight, which can shift a birthday by
+// a day depending on the server's time zone.
+const DATE_OID = 1082;
+pg.types.setTypeParser(DATE_OID, (value) => value);
+
+export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 const ALL_STATUS_CODES = [...STATUSES.map((s) => s.code), ENTERED_IN_ERROR];
 
-// The table is flat (one column per field) so it's easy to query. The API
-// speaks the nested, FHIR-shaped JSON; toPatient/toRow translate between them.
-// `nameText` is FHIR's HumanName.text: the full display name, kept for search.
-db.exec(`
-  CREATE TABLE IF NOT EXISTS patients (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    namePrefix    TEXT NOT NULL DEFAULT '',
-    givenNames    TEXT NOT NULL DEFAULT '[]',
-    familyName    TEXT NOT NULL DEFAULT '',
-    nameSuffix    TEXT NOT NULL DEFAULT '',
-    nameText      TEXT NOT NULL,
-    preferredName TEXT NOT NULL DEFAULT '',
-    birthDate     TEXT NOT NULL,
-    status        TEXT NOT NULL CHECK (status IN (${ALL_STATUS_CODES.map((s) => `'${s}'`).join(', ')})),
-    addressLine1  TEXT NOT NULL,
-    addressLine2  TEXT NOT NULL DEFAULT '',
-    city          TEXT NOT NULL,
-    state         TEXT NOT NULL,
-    postalCode    TEXT NOT NULL,
-    createdAt     TEXT NOT NULL DEFAULT (datetime('now')),
-    updatedAt     TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
+// Creates the table if it doesn't exist yet. Called once at startup.
+// - One column per field keeps queries simple; the API speaks the nested,
+//   FHIR-shaped JSON, and toPatient/toRow translate between the two.
+// - name_text is FHIR's HumanName.text: the full display name, kept for search.
+// - unaccent lets a search for "jose" find "José".
+export async function initDb() {
+  await pool.query(`
+    CREATE EXTENSION IF NOT EXISTS unaccent;
 
-// Row (flat) -> patient (FHIR-shaped JSON).
+    CREATE TABLE IF NOT EXISTS patients (
+      id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      name_prefix    TEXT NOT NULL DEFAULT '',
+      given_names    TEXT[] NOT NULL DEFAULT '{}',
+      family_name    TEXT NOT NULL DEFAULT '',
+      name_suffix    TEXT NOT NULL DEFAULT '',
+      name_text      TEXT NOT NULL,
+      preferred_name TEXT NOT NULL DEFAULT '',
+      birth_date     DATE NOT NULL,
+      status         TEXT NOT NULL CHECK (status IN (${ALL_STATUS_CODES.map((s) => `'${s}'`).join(', ')})),
+      address_line1  TEXT NOT NULL,
+      address_line2  TEXT NOT NULL DEFAULT '',
+      city           TEXT NOT NULL,
+      state          TEXT NOT NULL,
+      postal_code    TEXT NOT NULL,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+}
+
+// Row (flat, snake_case) -> patient (FHIR-shaped JSON).
 function toPatient(row) {
   if (!row) return undefined;
   return {
     id: row.id,
     name: {
-      text: row.nameText,
-      prefix: row.namePrefix,
-      given: JSON.parse(row.givenNames),
-      family: row.familyName,
-      suffix: row.nameSuffix,
+      text: row.name_text,
+      prefix: row.name_prefix,
+      given: row.given_names,
+      family: row.family_name,
+      suffix: row.name_suffix,
     },
-    preferredName: row.preferredName,
-    birthDate: row.birthDate,
+    preferredName: row.preferred_name,
+    birthDate: row.birth_date,
     status: row.status,
     address: {
-      line: [row.addressLine1, row.addressLine2].filter(Boolean),
+      line: [row.address_line1, row.address_line2].filter(Boolean),
       city: row.city,
       state: row.state,
-      postalCode: row.postalCode,
+      postalCode: row.postal_code,
     },
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
-// Patient (validated JSON) -> row parameters.
+// Patient (validated JSON) -> column values, in the order of COLUMNS below.
 function toRow({ name, preferredName, birthDate, status, address }) {
-  return {
-    namePrefix: name.prefix,
-    givenNames: JSON.stringify(name.given),
-    familyName: name.family,
-    nameSuffix: name.suffix,
-    nameText: [name.prefix, ...name.given, name.family, name.suffix].filter(Boolean).join(' '),
+  return [
+    name.prefix,
+    name.given,
+    name.family,
+    name.suffix,
+    [name.prefix, ...name.given, name.family, name.suffix].filter(Boolean).join(' '),
     preferredName,
     birthDate,
     status,
-    addressLine1: address.line[0],
-    addressLine2: address.line[1] ?? '',
-    city: address.city,
-    state: address.state,
-    postalCode: address.postalCode,
-  };
+    address.line[0],
+    address.line[1] ?? '',
+    address.city,
+    address.state,
+    address.postalCode,
+  ];
 }
+
+const COLUMNS = [
+  'name_prefix', 'given_names', 'family_name', 'name_suffix', 'name_text', 'preferred_name',
+  'birth_date', 'status', 'address_line1', 'address_line2', 'city', 'state', 'postal_code',
+];
 
 // What search looks through: full name, preferred name, and the birth date
 // in both ISO (1984-03-12) and US (03/12/1984) formats.
-const SEARCHABLE = `(nameText || ' ' || preferredName || ' ' || birthDate || ' ' || strftime('%m/%d/%Y', birthDate))`;
+const SEARCHABLE = `unaccent(name_text || ' ' || preferred_name || ' ' ||
+  to_char(birth_date, 'YYYY-MM-DD') || ' ' || to_char(birth_date, 'MM/DD/YYYY'))`;
 
-export function listPatients({ search = '', status = '' } = {}) {
+export async function listPatients({ search = '', status = '' } = {}) {
+  const params = [ENTERED_IN_ERROR];
+  const conditions = ['status <> $1'];
+
+  if (status) {
+    params.push(status);
+    conditions.push(`status = $${params.length}`);
+  }
+
   // Every word must match somewhere, so "maria garcia" finds "Maria Elena Garcia".
-  // % and _ are escaped so they're matched literally, not as LIKE wildcards.
-  const words = search.split(/\s+/).filter(Boolean);
-  const params = { status, enteredInError: ENTERED_IN_ERROR };
-  const wordClauses = words.map((word, i) => {
-    params[`w${i}`] = `%${word.replace(/[\\%_]/g, '\\$&')}%`;
-    return `AND ${SEARCHABLE} LIKE @w${i} ESCAPE '\\'`;
-  });
+  // ILIKE ignores case (including accented letters); % and _ are escaped so
+  // they're matched literally, not as wildcards.
+  for (const word of search.split(/\s+/).filter(Boolean)) {
+    params.push(`%${word.replace(/[\\%_]/g, '\\$&')}%`);
+    conditions.push(`${SEARCHABLE} ILIKE unaccent($${params.length})`);
+  }
 
-  return db
-    .prepare(
-      `SELECT * FROM patients
-       WHERE status != @enteredInError
-         AND (@status = '' OR status = @status)
-         ${wordClauses.join('\n         ')}
-       -- Sort by family name; patients with only a given name sort by that.
-       ORDER BY COALESCE(NULLIF(familyName, ''), nameText) COLLATE NOCASE, nameText`
-    )
-    .all(params)
-    .map(toPatient);
+  const { rows } = await pool.query(
+    `SELECT * FROM patients
+     WHERE ${conditions.join(' AND ')}
+     -- Sort by family name; patients with only a given name sort by that.
+     ORDER BY lower(COALESCE(NULLIF(family_name, ''), name_text)), name_text`,
+    params
+  );
+  return rows.map(toPatient);
 }
 
-export function getPatient(id) {
-  return toPatient(db.prepare('SELECT * FROM patients WHERE id = ?').get(id));
+export async function createPatient(patient) {
+  const placeholders = COLUMNS.map((_, i) => `$${i + 1}`).join(', ');
+  const { rows } = await pool.query(
+    `INSERT INTO patients (${COLUMNS.join(', ')}) VALUES (${placeholders}) RETURNING *`,
+    toRow(patient)
+  );
+  return toPatient(rows[0]);
 }
 
-export function createPatient(patient) {
-  const { lastInsertRowid } = db
-    .prepare(
-      `INSERT INTO patients (namePrefix, givenNames, familyName, nameSuffix, nameText, preferredName,
-                             birthDate, status, addressLine1, addressLine2, city, state, postalCode)
-       VALUES (@namePrefix, @givenNames, @familyName, @nameSuffix, @nameText, @preferredName,
-               @birthDate, @status, @addressLine1, @addressLine2, @city, @state, @postalCode)`
-    )
-    .run(toRow(patient));
-  return getPatient(lastInsertRowid);
-}
-
-export function updatePatient(id, patient) {
-  const { changes } = db
-    .prepare(
-      `UPDATE patients SET
-         namePrefix = @namePrefix, givenNames = @givenNames, familyName = @familyName,
-         nameSuffix = @nameSuffix, nameText = @nameText, preferredName = @preferredName,
-         birthDate = @birthDate, status = @status,
-         addressLine1 = @addressLine1, addressLine2 = @addressLine2,
-         city = @city, state = @state, postalCode = @postalCode,
-         updatedAt = datetime('now')
-       WHERE id = @id`
-    )
-    .run({ ...toRow(patient), id });
-  return changes ? getPatient(id) : undefined;
+// Returns undefined if no patient has this id.
+export async function updatePatient(id, patient) {
+  const assignments = COLUMNS.map((column, i) => `${column} = $${i + 1}`).join(', ');
+  const { rows } = await pool.query(
+    `UPDATE patients SET ${assignments}, updated_at = now()
+     WHERE id = $${COLUMNS.length + 1} RETURNING *`,
+    [...toRow(patient), id]
+  );
+  return toPatient(rows[0]);
 }
 
 // "Delete" never erases a medical record. It marks it as entered in error,
 // which hides it from the list (see PRODUCT.md §5).
-export function markEnteredInError(id) {
-  const { changes } = db
-    .prepare(`UPDATE patients SET status = ?, updatedAt = datetime('now') WHERE id = ?`)
-    .run(ENTERED_IN_ERROR, id);
-  return changes > 0;
+export async function markEnteredInError(id) {
+  const { rowCount } = await pool.query(
+    `UPDATE patients SET status = $1, updated_at = now() WHERE id = $2`,
+    [ENTERED_IN_ERROR, id]
+  );
+  return rowCount > 0;
 }

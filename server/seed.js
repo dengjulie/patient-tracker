@@ -1,7 +1,7 @@
 // Fills an empty database with sample patients for development. They cover
 // the name cases from PRODUCT.md §1: middle names, a suffix, a preferred
 // name, a prefix, and a patient with only one name.
-import { listPatients, createPatient } from './db.js';
+import { pool, initDb, listPatients, createPatient } from './db.js';
 
 const address = (line, city, state, postalCode) => ({ line, city, state, postalCode });
 
@@ -43,9 +43,11 @@ const samples = [
   },
 ];
 
-if (listPatients().length > 0) {
+await initDb();
+if ((await listPatients()).length > 0) {
   console.log('Database already has patients; skipping seed.');
 } else {
-  samples.forEach(createPatient);
+  for (const sample of samples) await createPatient(sample);
   console.log(`Seeded ${samples.length} patients.`);
 }
+await pool.end();

@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { STATUSES, US_STATES } from './constants.js';
 import {
+  initDb,
   listPatients,
   createPatient,
   updatePatient,
@@ -61,6 +62,9 @@ function validate(body, res) {
   res.status(400).json({ errors });
 }
 
+// Ids are positive integers; anything else can't match a patient.
+const parseId = (param) => (/^\d{1,9}$/.test(param) ? Number(param) : undefined);
+
 const app = express();
 app.use(express.json());
 
@@ -69,29 +73,33 @@ app.get('/api/reference', (req, res) => {
   res.json({ statuses: STATUSES, states: US_STATES });
 });
 
-app.get('/api/patients', (req, res) => {
+app.get('/api/patients', async (req, res) => {
   const { search = '', status = '' } = req.query;
-  res.json(listPatients({ search: String(search).trim(), status: String(status) }));
+  res.json(await listPatients({ search: String(search).trim(), status: String(status) }));
 });
 
-app.post('/api/patients', (req, res) => {
+app.post('/api/patients', async (req, res) => {
   const data = validate(req.body, res);
   if (!data) return;
-  res.status(201).json(createPatient(data));
+  res.status(201).json(await createPatient(data));
 });
 
-app.put('/api/patients/:id', (req, res) => {
+app.put('/api/patients/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(404).json({ error: 'Patient not found' });
   const data = validate(req.body, res);
   if (!data) return;
-  const patient = updatePatient(req.params.id, data);
+  const patient = await updatePatient(id, data);
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
   res.json(patient);
 });
 
-app.delete('/api/patients/:id', (req, res) => {
-  if (!markEnteredInError(req.params.id)) return res.status(404).json({ error: 'Patient not found' });
+app.delete('/api/patients/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id || !(await markEnteredInError(id))) return res.status(404).json({ error: 'Patient not found' });
   res.status(204).end();
 });
 
+await initDb();
 const PORT = process.env.PORT ?? 3001;
 app.listen(PORT, () => console.log(`API listening on http://localhost:${PORT}`));

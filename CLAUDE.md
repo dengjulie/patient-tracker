@@ -33,5 +33,6 @@ Instructions for Claude Code on this project. Product reasoning lives in
 - **One logical change per commit**, with a message that explains the why.
 
 ## Running
-- Backend: `cd server && npm install && npm run seed && npm run dev` (port 3001)
+- Database: `docker compose up -d` (Postgres on port 5433)
+- Backend: `cd server && cp .env.example .env && npm install && npm run seed && npm run dev` (port 3001)
 - Frontend: *(added in piece 2)*

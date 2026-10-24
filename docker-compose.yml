@@ -1,0 +1,16 @@
+# Local Postgres for development: `docker compose up -d`
+# Uses host port 5433 so it doesn't clash with a Postgres already on 5432.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: patient_tracker
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

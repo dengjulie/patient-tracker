@@ -147,14 +147,20 @@ goes on the list below.
 **To test**
 - **Hospital-scale data.** Load a realistic volume (hundreds of thousands to
   millions of patients, as in large health systems) and check:
-  - Search speed: `LIKE '%word%'` scans the whole table, so we may need
-    SQLite full-text search (FTS5).
+  - Search speed: `ILIKE '%word%'` scans the whole table, so we'll likely need
+    a `pg_trgm` index (and an indexable unaccent wrapper).
   - List size: the list currently returns every match, so it will need
     pagination or a result limit.
   - Seeding: we'll need a script that generates realistic fake patients.
 
 **Product features**
 - Column sorting and pagination
+- Multiple addresses per patient (home vs mailing) and address history, in a
+  separate addresses table
+- Address verification against USPS data, to standardize "St" vs "Street"
+  and reduce duplicate patients
+- Partial birth dates (FHIR allows `1984` or `1984-03`) for patients whose
+  exact date of birth is unknown
 - A detail view per patient (with the `GET /api/patients/:id` endpoint)
 - A reason for each status change ("lost to follow-up" vs "moved away") and
   status history

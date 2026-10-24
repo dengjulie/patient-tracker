@@ -10,7 +10,7 @@ libraries, few moving parts, and code a new reader can follow.
 | --- | --- | --- |
 | Front end | **React** (Vite) | Widely known; fast dev server; almost no config. |
 | Back end | **Express 5** | The smallest well-known Node HTTP framework. v5 forwards errors from async handlers automatically. |
-| Database | **SQLite** via `better-sqlite3` | A single file and no server to install. The synchronous API keeps the code linear and readable. |
+| Database | **PostgreSQL 17** via `pg`, run with Docker Compose | Real `DATE` and list (`TEXT[]`) types; `unaccent` for accent-insensitive name search; `pg_trgm` indexes when we reach hospital scale. It's what production health systems run. |
 | Validation | **Zod** | Declares each field rule once, and produces readable per-field error messages. |
 
 ## Layout
@@ -19,7 +19,9 @@ libraries, few moving parts, and code a new reader can follow.
 patient-tracker/
 ├── PRODUCT.md          product decisions and reasoning
 ├── TECHNICAL_PLAN.md   this file
+├── docker-compose.yml  local Postgres (host port 5433)
 ├── server/
+│   ├── .env.example    DATABASE_URL; copy to .env
 │   ├── constants.js    status list (FHIR) and US state list
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── index.js        Express routes + Zod validation
@@ -61,8 +63,8 @@ Example patient:
   "birthDate": "1991-07-28",
   "status": "planned",
   "address": { "line": ["45 Elm Ave"], "city": "Austin", "state": "TX", "postalCode": "78701" },
-  "createdAt": "2026-10-24 16:35:45",
-  "updatedAt": "2026-10-24 16:35:45"
+  "createdAt": "2026-10-24T16:35:45.000Z",
+  "updatedAt": "2026-10-24T16:35:45.000Z"
 }
 ```
 
@@ -71,21 +73,43 @@ name parts. Clients never send it.
 
 ## Database
 
-- **One flat `patients` table**, one column per field. Flat columns are easy
-  to query and index.
-  - `givenNames` is stored as JSON text, because it's a list.
-  - `nameText` is stored so search can match against the full name.
-- **Translation:** `toPatient` / `toRow` in `db.js` convert between flat rows
-  and the nested JSON. This is the only translation layer.
+**Why Postgres over SQLite:** we started on SQLite (no setup at all). We
+switched because three product decisions need what Postgres has built in:
+- **Dates:** a real `DATE` type for birth dates.
+- **Search on names from every culture:** SQLite's `LIKE` only ignores case
+  for A–Z, so "josé" wouldn't find "JOSÉ". Postgres `ILIKE` with `unaccent`
+  matches both, and also lets "jose" find "José".
+- **Hospital scale:** a path to fast search over large tables via `pg_trgm`
+  indexes.
+
+The cost is that reviewers need Docker (`docker compose up -d`) or a local
+Postgres install.
+
+- **One flat `patients` table**, one column per field, in `snake_case`
+  (the Postgres convention).
+  - `given_names` is `TEXT[]`, a native Postgres list.
+  - `name_text` (the full display name) is stored so search can match it.
+  - The address is stored in full as five columns: line 1, line 2, city,
+    state, postal code. Epic's reporting database stores the patient's
+    current address the same way. A separate addresses table (for multiple
+    addresses or history, as in OpenMRS/FHIR) is on the Later list.
+- **Translation:** `toPatient` / `toRow` in `db.js` convert between flat
+  `snake_case` rows and the nested camelCase JSON. This is the only
+  translation layer.
 - **Status constraint:** a `CHECK` constraint on `status` means the database
   itself rejects invalid codes, as a backstop behind the API's own check.
-- **Dates:** stored as `YYYY-MM-DD` text, which matches `<input type="date">`
-  and sorts correctly as plain text.
-- **Sort order:** family name, falling back to the full name for patients with
-  only a given name.
+- **Dates:**
+  - `birth_date` is a `DATE`. `pg` is told to return it as a plain
+    `YYYY-MM-DD` string. Its default turns it into a JavaScript `Date` at
+    local midnight, which can shift a birthday by a day across time zones.
+  - We don't use Unix timestamps, for the same reason, and because they're
+    negative for anyone born before 1970.
+  - `created_at` / `updated_at` are `TIMESTAMPTZ`.
+- **Sort order:** family name, case-insensitive, falling back to the full name
+  for patients with only a given name.
 - **No migrations tool.** The table is created on startup if missing. While
-  the schema is still changing in development, we delete `patients.db` and
-  reseed.
+  the schema is still changing in development, we reset with
+  `docker compose down -v` and reseed.
 
 ## API
 
@@ -101,12 +125,14 @@ name parts. Clients never send it.
 - Validation failures return `400` with `{ "errors": { "<dotted.path>": "message" } }`,
   e.g. `"address.postalCode": "Use a 5-digit ZIP (or ZIP+4)"`. The form shows
   each message under the field with that path.
-- Unknown ids return `404`.
+- Unknown or non-numeric ids return `404`.
 
 **Search**
 - Search is done on the server. The query is split into words, and **every
   word** must appear in one of: the full name, the preferred name, or the
   birth date (ISO or MM/DD/YYYY).
+- Matching ignores case and accents (`ILIKE` + `unaccent`): "jose munoz" finds
+  *José Muñoz*.
 - `%` and `_` are escaped so they match literally rather than as wildcards.
 
 Planned scale work and future features are tracked in
@@ -115,5 +141,6 @@ Planned scale work and future features are tracked in
 ## Build order
 
 1. ✅ **Backend**: schema, validation, REST API, seed data (tested with curl)
-2. **Frontend**: patient table with debounced live search and status filter
-3. **Frontend**: add/edit modal form (inline errors) and delete with confirmation
+2. ✅ **Postgres**: switch from SQLite, Docker Compose setup
+3. **Frontend**: patient table with debounced live search and status filter
+4. **Frontend**: add/edit modal form (inline errors) and delete with confirmation
