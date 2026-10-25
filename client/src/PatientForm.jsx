@@ -77,7 +77,13 @@ const FORM_FIELDS = new Set(
   )
 );
 
-const today = () => new Date().toISOString().slice(0, 10);
+// The provider's local date as YYYY-MM-DD. toISOString() would give the UTC
+// date, which is a day off in the evening (US) or morning (Asia).
+function today() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 
 // These fields describe a patient, not the person typing. Stop the browser and
 // password managers (1Password, LastPass) from offering to fill in the

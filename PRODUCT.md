@@ -57,7 +57,10 @@ safety practice is to confirm **two identifiers** before treating a patient
 are almost always **name + date of birth**. Without a DOB, two patients with
 the same name are hard to tell apart.
 
-Dates in the future are rejected.
+Dates in the future are rejected. The date picker stops at the provider's
+local today. The server checks against today in UTC, so near midnight UTC
+the two can differ by a day: a provider far ahead of UTC (e.g. in Asia) may
+see a birth from earlier today refused until UTC catches up.
 
 ## 3. Address: US only, kept simple
 
