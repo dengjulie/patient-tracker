@@ -47,8 +47,10 @@ export default function PatientsPage({ user, onLogout }) {
     window.scrollTo({ top: 0 });
   }
 
-  const queryKey = JSON.stringify({ ...filters, page, pageSize: PAGE_SIZE });
-  const requestKey = `${refreshCount}|${queryKey}`;
+  // One string identifies a list request: the query, plus the refresh count so
+  // a reload after a save is a new request even when the query is unchanged.
+  // A string, so the effect below reruns only when it actually changes.
+  const requestKey = JSON.stringify({ refreshCount, query: { ...filters, page, pageSize: PAGE_SIZE } });
 
   // Each result remembers which request it answers. We're loading whenever the
   // latest result is for an older request; the old rows stay visible meanwhile.
@@ -72,7 +74,8 @@ export default function PatientsPage({ user, onLogout }) {
     // Cancel the previous search when a new one starts, so a slow, older
     // response can never overwrite a newer one.
     const controller = new AbortController();
-    api('POST', '/patients/_search', { body: JSON.parse(queryKey), signal: controller.signal })
+    const { query } = JSON.parse(requestKey);
+    api('POST', '/patients/_search', { body: query, signal: controller.signal })
       .then((data) => {
         setResult({ requestKey, data, error: '' });
         // Deleting the only patient on the last page leaves that page empty;
@@ -86,7 +89,7 @@ export default function PatientsPage({ user, onLogout }) {
         setResult((prev) => ({ ...prev, requestKey, error: "Couldn't load patients. Please try again." }));
       });
     return () => controller.abort();
-  }, [requestKey, queryKey]);
+  }, [requestKey]);
 
   // After a change, reload the page the provider was on, keeping their place
   // and filters. The notification confirms the change.
