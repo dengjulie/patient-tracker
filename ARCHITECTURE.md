@@ -370,7 +370,9 @@ The design comes from PRODUCT.md §7. In code:
   - **One set of validation rules:** the client doesn't validate. Server
     errors (`{ "address.postalCode": "…" }`) go straight into
     `form.setErrors`, with a small map for the few paths that differ
-    (`name.given` → the first-name field).
+    (`name.given` → the first-name field). An error whose path matches no
+    field is shown at the top of the form, so a failed save never looks
+    like nothing happened.
   - **No autofill:** every field sets `autoComplete="off"` plus
     `data-1p-ignore` / `data-lpignore`, so the browser and password
     managers don't fill the *provider's* name or address into a patient

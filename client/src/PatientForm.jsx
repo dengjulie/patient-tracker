@@ -68,6 +68,13 @@ const ERROR_FIELDS = {
   'address.line': 'address.street',
 };
 
+// Every field path in the form ("name.first", "birthDate", ...).
+const FORM_FIELDS = new Set(
+  Object.entries(EMPTY_FORM).flatMap(([key, value]) =>
+    value && typeof value === 'object' ? Object.keys(value).map((child) => `${key}.${child}`) : [key]
+  )
+);
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 // These fields describe a patient, not the person typing. Stop the browser and
@@ -101,8 +108,15 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
       onSaved(saved, isNew);
     } catch (err) {
       if (err.status === 400 && err.body?.errors) {
-        const fieldErrors = Object.entries(err.body.errors).map(([path, message]) => [ERROR_FIELDS[path] ?? path, message]);
-        form.setErrors(Object.fromEntries(fieldErrors));
+        const fieldErrors = {};
+        const otherErrors = [];
+        for (const [path, message] of Object.entries(err.body.errors)) {
+          const field = ERROR_FIELDS[path] ?? path;
+          if (FORM_FIELDS.has(field)) fieldErrors[field] = message;
+          else otherErrors.push(message); // no field to show it under, so show it at the top
+        }
+        form.setErrors(fieldErrors);
+        setFormError(otherErrors.join(' '));
       } else if (err.status !== 401) {
         // Reload the list behind the form, so reopening shows the latest copy.
         if (err.status === 404 || err.status === 412) onStale();
