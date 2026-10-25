@@ -154,6 +154,10 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
       size="lg"
       fullScreen={isMobile}
       closeOnClickOutside={false} // a stray click shouldn't throw away typing
+      // While saving or deleting, the form can't be closed: the change would
+      // still go through, and an error would have nowhere to show.
+      closeOnEscape={!submitting}
+      closeButtonProps={{ disabled: submitting }}
     >
       <form onSubmit={form.onSubmit(handleSubmit)} noValidate>
         <Stack gap="lg">

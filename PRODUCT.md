@@ -166,7 +166,9 @@ retention laws). A permanent delete also can't be undone after a misclick.
     overwritten. This is FHIR's version check (`If-Match`). Merging the two
     edits automatically is more than a small practice needs.
   - **Accidental closing:** clicking outside the modal doesn't close it, so a
-    stray click can't throw away what was typed.
+    stray click can't throw away what was typed. While a save or delete is
+    in progress the form can't be closed at all, so nobody thinks they
+    cancelled a change that then goes through.
   - **After saving,** a notification confirms it and the list jumps to page 1,
     where the patient now sits at the top.
 - **Deleting:** from the edit form, with a confirmation that says when to use
