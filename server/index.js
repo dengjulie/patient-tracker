@@ -23,7 +23,13 @@ const patientSchema = z.object({
   name: z
     .object({
       prefix: optionalText,
-      given: z.array(z.string().trim()).default([]).transform((names) => names.filter(Boolean)),
+      given: z
+        .array(z.string().trim())
+        .default([])
+        // A blank name ahead of a filled one would move every name up a place
+        // (a middle name would come back as the first name).
+        .refine((names) => names.slice(0, names.findLastIndex(Boolean) + 1).every(Boolean), 'Enter a first name before any middle names')
+        .transform((names) => names.filter(Boolean)),
       family: optionalText,
       suffix: optionalText,
     }, 'Name is required')

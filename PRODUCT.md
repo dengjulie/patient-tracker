@@ -40,6 +40,10 @@ names wrong.
 
 - **Required:** at least a given name **or** a family name. This is the US
   Core FHIR rule, and it means people with only one name can be registered.
+- **No middle name without a first name.** A middle name with a blank first
+  name is refused ("Enter a first name before any middle names") rather than
+  saved, because FHIR's given-name list has no empty slots: the middle name
+  would silently become the first name.
 - **Characters:** any characters are accepted (O'Brien, José, Nguyễn,
   Smith-Jones). There is deliberately no "letters only" rule.
 

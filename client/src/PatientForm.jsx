@@ -43,7 +43,9 @@ function toPayload(values) {
     name: {
       prefix: name.prefix,
       // The first name stays whole ("Mary Ann"); middle names split on spaces.
-      given: [name.first, ...name.middle.split(/\s+/)].map((n) => n.trim()).filter(Boolean),
+      // A blank first name is still sent, in first place, so the server can
+      // ask for it instead of saving a middle name as the first.
+      given: [name.first.trim(), ...name.middle.split(/\s+/).filter(Boolean)],
       family: name.family,
       suffix: name.suffix,
     },

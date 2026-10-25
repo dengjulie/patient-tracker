@@ -366,7 +366,9 @@ The design comes from PRODUCT.md §7. In code:
   - **Familiar fields, FHIR payload:** the form uses first/middle and
     street/unit fields; `toFormValues` / `toPayload` convert to and from the
     API's `name.given[]` and `address.line[]`. The first name stays whole
-    ("Mary Ann"); middle names split on spaces.
+    ("Mary Ann"); middle names split on spaces. A blank first name is still
+    sent in first place, and the API rejects a blank given name ahead of a
+    filled one, so a middle name is never saved as the first.
   - **One set of validation rules:** the client doesn't validate. Server
     errors (`{ "address.postalCode": "…" }`) go straight into
     `form.setErrors`, with a small map for the few paths that differ
