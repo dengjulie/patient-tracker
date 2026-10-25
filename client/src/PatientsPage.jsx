@@ -24,6 +24,7 @@ const STATUS_COLORS = {
 export default function PatientsPage({ user, onLogout }) {
   const [reference, setReference] = useState({ statuses: [], states: [] });
   const { statuses } = reference;
+  const [referenceError, setReferenceError] = useState('');
   // undefined = form closed, null = adding a patient, object = editing that patient
   const [editing, setEditing] = useState(undefined);
   // Bumped after a save or delete to reload the list, even if the query is unchanged.
@@ -59,7 +60,12 @@ export default function PatientsPage({ user, onLogout }) {
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
   useEffect(() => {
-    api('GET', '/reference').then(setReference);
+    api('GET', '/reference')
+      .then(setReference)
+      .catch((err) => {
+        // A 401 needs no message: the app returns to the login page.
+        if (err.status !== 401) setReferenceError("Couldn't load the patient form. Please refresh the page.");
+      });
   }, []);
 
   useEffect(() => {
@@ -127,7 +133,8 @@ export default function PatientsPage({ user, onLogout }) {
           </Group>
         </Group>
 
-        {editing !== undefined && (
+        {/* The form needs the status and state lists for its dropdowns. */}
+        {editing !== undefined && statuses.length > 0 && (
           <PatientForm
             patient={editing}
             reference={reference}
@@ -157,11 +164,11 @@ export default function PatientsPage({ user, onLogout }) {
           />
         </Group>
 
-        {error && (
-          <Alert color="red" variant="light">
-            {error}
+        {[referenceError, error].filter(Boolean).map((message) => (
+          <Alert key={message} color="red" variant="light">
+            {message}
           </Alert>
-        )}
+        ))}
 
         {patients === null && !error ? (
           <Center py="xl">
