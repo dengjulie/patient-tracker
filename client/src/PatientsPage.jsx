@@ -203,10 +203,11 @@ export default function PatientsPage({ user, onLogout }) {
                   <Table.Tbody>
                     {patients.map((patient) => (
                       // The whole row opens the patient for mouse users; the name is a
-                      // real button so keyboard and screen-reader users can too.
+                      // real button so keyboard and screen-reader users can too. Its
+                      // click (including Enter/Space) bubbles up to the row's handler.
                       <Table.Tr key={patient.id} onClick={() => setEditing(patient)} style={{ cursor: 'pointer' }}>
                         <Table.Td>
-                          <Anchor component="button" type="button" fw={500} c="inherit" onClick={() => setEditing(patient)}>
+                          <Anchor component="button" type="button" fw={500} c="inherit">
                             {displayName(patient)}
                           </Anchor>
                         </Table.Td>
