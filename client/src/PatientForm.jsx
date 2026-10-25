@@ -92,6 +92,20 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
   const [formError, setFormError] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // For a failed save or delete. A 401 needs no message: the app returns to
+  // the login page.
+  function showRequestError(err) {
+    if (err.status === 401) return;
+    // Reload the list behind the form, so reopening shows the latest copy.
+    if (err.status === 404 || err.status === 412) onStale();
+    setFormError(
+      {
+        404: 'This patient no longer exists.',
+        412: 'Someone else changed this patient while you were editing. Close the form and open the patient again to see their changes.',
+      }[err.status] ?? 'Something went wrong. Please try again.'
+    );
+  }
+
   // Validation lives on the server (one set of rules); its messages are shown
   // under the matching fields.
   async function handleSubmit(values) {
@@ -117,15 +131,8 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
         }
         form.setErrors(fieldErrors);
         setFormError(otherErrors.join(' '));
-      } else if (err.status !== 401) {
-        // Reload the list behind the form, so reopening shows the latest copy.
-        if (err.status === 404 || err.status === 412) onStale();
-        setFormError(
-          {
-            404: 'This patient no longer exists.',
-            412: 'Someone else changed this patient while you were editing. Close the form and open the patient again to see their changes.',
-          }[err.status] ?? 'Something went wrong. Please try again.'
-        );
+      } else {
+        showRequestError(err);
       }
       setSubmitting(false);
     }
@@ -133,11 +140,12 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
 
   async function handleDelete() {
     setSubmitting(true);
+    setFormError('');
     try {
       await api('DELETE', `/patients/${patient.id}`);
       onDeleted(patient);
     } catch (err) {
-      if (err.status !== 401) setFormError('Something went wrong. Please try again.');
+      showRequestError(err);
       setSubmitting(false);
       setConfirmingDelete(false);
     }
