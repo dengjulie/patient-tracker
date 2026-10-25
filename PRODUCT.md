@@ -173,8 +173,12 @@ retention laws). A permanent delete also can't be undone after a misclick.
     stray click can't throw away what was typed. While a save or delete is
     in progress the form can't be closed at all, so nobody thinks they
     cancelled a change that then goes through.
-  - **After saving,** a notification confirms it and the list jumps to page 1,
-    where the patient now sits at the top.
+  - **After saving or deleting,** a notification confirms it and the list
+    reloads in place: same page, same search and status filter, so the
+    provider doesn't lose their place. (The changed patient moves to the top
+    of page 1 if it still matches the filters. Jumping there would throw
+    away the provider's search.) If a delete empties the last page, the list
+    shows the new last page.
 - **Deleting:** from the edit form, with a confirmation that says when to use
   it: "Use this only for records created by mistake… If care has ended, set
   the status to Finished instead." This steers providers away from deleting

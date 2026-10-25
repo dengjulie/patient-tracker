@@ -73,7 +73,14 @@ export default function PatientsPage({ user, onLogout }) {
     // response can never overwrite a newer one.
     const controller = new AbortController();
     api('POST', '/patients/_search', { body: JSON.parse(queryKey), signal: controller.signal })
-      .then((data) => setResult({ requestKey, data, error: '' }))
+      .then((data) => {
+        setResult({ requestKey, data, error: '' });
+        // Deleting the only patient on the last page leaves that page empty;
+        // show the new last page instead.
+        if (data.patients.length === 0 && data.page > 1) {
+          setPageChoice((prev) => ({ ...prev, page: Math.max(1, Math.ceil(data.total / PAGE_SIZE)) }));
+        }
+      })
       .catch((err) => {
         if (err.name === 'AbortError') return;
         setResult((prev) => ({ ...prev, requestKey, error: "Couldn't load patients. Please try again." }));
@@ -81,23 +88,22 @@ export default function PatientsPage({ user, onLogout }) {
     return () => controller.abort();
   }, [requestKey, queryKey]);
 
-  // After a change, show page 1: the list is newest first, so that's where the
-  // added or edited patient now is.
-  function reloadFromFirstPage() {
-    setPageChoice({ filtersKey, page: 1 });
+  // After a change, reload the page the provider was on, keeping their place
+  // and filters. The notification confirms the change.
+  function reload() {
     setRefreshCount((n) => n + 1);
   }
 
   function handleSaved(patient, isNew) {
     setEditing(undefined);
     notifications.show({ color: 'green', title: isNew ? 'Patient added' : 'Changes saved', message: displayName(patient) });
-    reloadFromFirstPage();
+    reload();
   }
 
   function handleDeleted(patient) {
     setEditing(undefined);
     notifications.show({ title: 'Patient deleted', message: `${displayName(patient)} was marked as entered in error.` });
-    reloadFromFirstPage();
+    reload();
   }
 
   const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
@@ -141,7 +147,7 @@ export default function PatientsPage({ user, onLogout }) {
             onClose={() => setEditing(undefined)}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
-            onStale={() => setRefreshCount((n) => n + 1)}
+            onStale={reload}
           />
         )}
 

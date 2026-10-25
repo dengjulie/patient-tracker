@@ -379,8 +379,9 @@ The design comes from PRODUCT.md §7. In code:
     `data-1p-ignore` / `data-lpignore`, so the browser and password
     managers don't fill the *provider's* name or address into a patient
     record. 1Password did exactly that in testing before this was added.
-  - **After a save or delete,** a refresh counter reloads the list from page
-    1, where the changed patient now appears (newest first).
+  - **After a save or delete,** a refresh counter reloads the current page
+    with the current filters. If the reloaded page comes back empty (a
+    delete emptied the last page), the list moves to the new last page.
 - **Paging:** the page number is stored with the filters it was chosen for,
   so a new search or status filter goes back to page 1 without an extra
   effect or request.
