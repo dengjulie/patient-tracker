@@ -76,7 +76,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const NO_AUTOFILL = { autoComplete: 'off', 'data-1p-ignore': true, 'data-lpignore': 'true' };
 
 // `patient` is the patient being edited, or null to add a new one.
-export default function PatientForm({ patient, reference, onClose, onSaved, onDeleted }) {
+// `onStale` is called when the list's copy of the patient is out of date.
+export default function PatientForm({ patient, reference, onClose, onSaved, onDeleted, onStale }) {
   const isNew = patient === null;
   const isMobile = useMediaQuery('(max-width: 48em)');
   const form = useForm({ initialValues: isNew ? EMPTY_FORM : toFormValues(patient) });
@@ -92,14 +93,25 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
     try {
       const saved = isNew
         ? await api('POST', '/patients', { body: toPayload(values) })
-        : await api('PUT', `/patients/${patient.id}`, { body: toPayload(values) });
+        : await api('PUT', `/patients/${patient.id}`, {
+            body: toPayload(values),
+            // Refused if someone saved this patient after we loaded it.
+            headers: { 'If-Match': `"${patient.updatedAt}"` },
+          });
       onSaved(saved, isNew);
     } catch (err) {
       if (err.status === 400 && err.body?.errors) {
         const fieldErrors = Object.entries(err.body.errors).map(([path, message]) => [ERROR_FIELDS[path] ?? path, message]);
         form.setErrors(Object.fromEntries(fieldErrors));
       } else if (err.status !== 401) {
-        setFormError(err.status === 404 ? 'This patient no longer exists.' : 'Something went wrong. Please try again.');
+        // Reload the list behind the form, so reopening shows the latest copy.
+        if (err.status === 404 || err.status === 412) onStale();
+        setFormError(
+          {
+            404: 'This patient no longer exists.',
+            412: 'Someone else changed this patient while you were editing. Close the form and open the patient again to see their changes.',
+          }[err.status] ?? 'Something went wrong. Please try again.'
+        );
       }
       setSubmitting(false);
     }

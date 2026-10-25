@@ -215,15 +215,26 @@ export async function createPatient(patient, db = pool) {
   return toPatient(rows[0]);
 }
 
-// Returns undefined if no patient has this id.
-export async function updatePatient(id, patient, db = pool) {
+// Returns undefined if no patient has this id, or if `ifUpdatedAt` is given
+// and the patient has been saved since then (someone else's edit).
+// updated_at is compared to the millisecond because that's all the API's
+// JSON timestamps carry; Postgres stores microseconds.
+export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
   const assignments = COLUMNS.map((column, i) => `${column} = $${i + 1}`).join(', ');
   const { rows } = await db.query(
     `UPDATE patients SET ${assignments}, updated_at = now()
-     WHERE id = $${COLUMNS.length + 1} RETURNING *`,
-    [...toRow(patient), id]
+     WHERE id = $${COLUMNS.length + 1}
+       AND ($${COLUMNS.length + 2}::timestamptz IS NULL
+            OR date_trunc('milliseconds', updated_at) = $${COLUMNS.length + 2})
+     RETURNING *`,
+    [...toRow(patient), id, ifUpdatedAt ?? null]
   );
   return toPatient(rows[0]);
+}
+
+export async function patientExists(id, db = pool) {
+  const { rowCount } = await db.query(`SELECT 1 FROM patients WHERE id = $1`, [id]);
+  return rowCount > 0;
 }
 
 // Only seed.js uses this, to spread fake patients' history over time so the

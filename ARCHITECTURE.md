@@ -252,7 +252,7 @@ code. It's listed so the whole database is documented in one place.
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
 | POST | `/api/patients/_search` | One page of patients, excluding entered-in-error. Body (all optional): `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }` (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
-| PUT | `/api/patients/:id` | Replace. Returns the updated patient. |
+| PUT | `/api/patients/:id` | Replace. Returns the updated patient. Send `If-Match: "<updatedAt>"` (the value the editor loaded) to refuse the save if someone changed the patient since; the form always does. |
 | DELETE | `/api/patients/:id` | Sets status to `entered-in-error` (no row is erased). Returns `204`. |
 
 All routes except `/api/session` return `401` without a valid session.
@@ -262,6 +262,10 @@ All routes except `/api/session` return `401` without a valid session.
   e.g. `"address.postalCode": "Use a 5-digit ZIP (or ZIP+4)"`. The form shows
   each message under the field with that path.
 - Unknown or non-numeric ids return `404`.
+- A `PUT` whose `If-Match` no longer matches the patient's `updatedAt`
+  returns `412`. This is HTTP's (and FHIR's) optimistic locking: no lock is
+  held while a form is open, and `updatedAt` serves as the version, compared
+  to the millisecond, so no extra column is needed.
 - Unexpected errors return `500` with a generic JSON message. The stack trace
   is logged; the request body never is, because it holds PHI.
 

@@ -159,6 +159,12 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - **Errors:** shown under the field they belong to.
   - **No autofill:** the browser and password managers can't fill the
     provider's own name or address into a patient's record.
+  - **Two providers editing the same patient:** if someone else saved the
+    patient after the form was opened, the save is refused with "Someone else
+    changed this patient while you were editing. Close the form and open the
+    patient again to see their changes." Nobody's changes are silently
+    overwritten. This is FHIR's version check (`If-Match`). Merging the two
+    edits automatically is more than a small practice needs.
   - **Accidental closing:** clicking outside the modal doesn't close it, so a
     stray click can't throw away what was typed.
   - **After saving,** a notification confirms it and the list jumps to page 1,

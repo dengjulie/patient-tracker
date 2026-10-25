@@ -134,6 +134,7 @@ export default function PatientsPage({ user, onLogout }) {
             onClose={() => setEditing(undefined)}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
+            onStale={() => setRefreshCount((n) => n + 1)}
           />
         )}
 

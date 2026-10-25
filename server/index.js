@@ -6,6 +6,7 @@ import {
   listPatients,
   createPatient,
   updatePatient,
+  patientExists,
   markEnteredInError,
   transaction,
 } from './db.js';
@@ -121,17 +122,29 @@ app.post('/api/patients', async (req, res) => {
   res.status(201).json(patient);
 });
 
+// The If-Match header carries the updatedAt the editor loaded (HTTP's and
+// FHIR's way to stop two people overwriting each other's changes). If the
+// patient was saved since, the update is refused with 412.
+const ifMatchSchema = z.iso.datetime().optional();
+
 app.put('/api/patients/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(404).json({ error: 'Patient not found' });
+  const ifMatch = ifMatchSchema.safeParse(req.get('If-Match')?.replace(/^W\//, '').replaceAll('"', ''));
+  if (!ifMatch.success) return res.status(412).json({ error: 'If-Match must be the patient\'s updatedAt' });
   const data = validate(req.body, res);
   if (!data) return;
   const patient = await transaction(async (tx) => {
-    const updated = await updatePatient(id, data, tx);
+    const updated = await updatePatient(id, data, ifMatch.data, tx);
     if (updated) await audit(req, 'update', { patientIds: [id] }, tx);
     return updated;
   });
-  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  if (!patient) {
+    if (ifMatch.data && (await patientExists(id))) {
+      return res.status(412).json({ error: 'Someone else changed this patient' });
+    }
+    return res.status(404).json({ error: 'Patient not found' });
+  }
   res.json(patient);
 });
 
