@@ -7,7 +7,7 @@ libraries, few moving parts, and code a new reader can follow.
 ## Overview
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph Browser["Browser: React 19 + Mantine (client/)"]
         App["App.jsx<br/>login page or patients page"]
         Login["LoginPage.jsx"]
