@@ -14,7 +14,7 @@ the build order in
 | Doc | What's in it |
 | --- | --- |
 | [PRODUCT.md](PRODUCT.md) | Every product decision and the reasoning behind it: where we followed FHIR over the original requirements, US-only addresses, HIPAA-driven security, MVP scope, and the post-MVP backlog. |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Stack choices, data model, **database schema** (with diagram), API reference, authentication, and build order. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | An **architecture diagram** and one request traced end to end, stack choices, data model, **database schema** (with diagram), API reference, authentication, and build order. |
 | [CLAUDE.md](CLAUDE.md) | How this project was built with Claude Code: who makes decisions, code standards, verification. |
 
 ## Running locally

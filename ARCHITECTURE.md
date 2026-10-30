@@ -4,6 +4,69 @@ How the product decisions in [PRODUCT.md](PRODUCT.md) are built.
 The guiding rule is **the simplest thing that's correct**: well-known
 libraries, few moving parts, and code a new reader can follow.
 
+## Overview
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser: React 19 + Mantine (client/)"]
+        App["App.jsx<br/>login page or patients page"]
+        Login["LoginPage.jsx"]
+        List["PatientsPage.jsx<br/>table, search, filter, paging"]
+        Form["PatientForm.jsx<br/>add, edit, delete"]
+        Api["api.js<br/>every API call<br/>15-minute idle clock"]
+        App --> Login & List
+        List --> Form
+        Login & List & Form --> Api
+    end
+
+    Vite["Vite dev server :5173<br/>proxies /api to :3001"]
+
+    subgraph Server["Express 5 API :3001 (server/)"]
+        Sessions["express-session<br/>cookie to session"]
+        SessionRoutes["/api/session (auth.js)<br/>log in, who am I, log out"]
+        Guard["requireAuth<br/>401 without a session"]
+        Routes["Patient + reference routes (index.js)<br/>Zod validation, If-Match check"]
+        Audit["audit.js<br/>who, what, which patients"]
+        Db["db.js<br/>all SQL, transactions"]
+        Sessions --> SessionRoutes
+        Sessions --> Guard --> Routes
+        Routes --> Audit --> Db
+        Routes --> Db
+        SessionRoutes --> Audit
+        SessionRoutes --> Db
+    end
+
+    subgraph Postgres["PostgreSQL 17 in Docker :5433"]
+        patients[("patients")]
+        users[("users")]
+        audit_log[("audit_log")]
+        session[("session")]
+    end
+
+    Scripts["seed.js, create-user.js"]
+
+    Api -- "JSON + session cookie" --> Vite --> Sessions
+    Db --> patients & users & audit_log
+    Sessions -. "connect-pg-simple" .-> session
+    Scripts --> Db
+```
+
+**One request, end to end:** saving an edited patient.
+1. `PatientForm` calls `api('PUT', '/patients/42', …)` with an `If-Match`
+   header holding the `updatedAt` it loaded.
+2. Vite forwards `/api/*` to Express, so the browser sees one origin and
+   sends the session cookie.
+3. `express-session` loads the session from Postgres; `requireAuth` rejects
+   the request with `401` if there isn't one (the browser then shows the
+   login page).
+4. The route checks `If-Match`, and Zod validates the body (`400` with
+   per-field errors if it's invalid).
+5. In one transaction, `db.js` updates the patient *only if* `updated_at`
+   still matches, and `audit.js` records the update. If someone else saved
+   first, nothing changes and the API returns `412`.
+6. The updated patient goes back as JSON; `api.js` resets the idle clock and
+   the list reloads.
+
 ## Stack
 
 | Layer | Choice | Why |
