@@ -7,11 +7,13 @@ import {
   createPatient,
   updatePatient,
   patientExists,
+  findPatientsBornOn,
   markEnteredInError,
   transaction,
 } from './db.js';
 import { sessions, requireAuth, login, logout, currentUser } from './auth.js';
 import { audit } from './audit.js';
+import { planImport } from './import.js';
 
 // One schema describes a valid patient, shaped like FHIR (see PRODUCT.md).
 // Each message is written to be shown directly under the matching form field.
@@ -59,24 +61,32 @@ const patientSchema = z.object({
   ),
 });
 
-// Returns the cleaned patient, or sends a 400 with { errors: { "address.city": message } }.
+// Returns { data } for a valid patient, or { errors: { "address.city": message } }.
 // Keys are dotted paths, so the form can match each error to its field.
-function validate(body, res) {
+function parsePatient(body) {
   const result = patientSchema.safeParse(body ?? {});
-  if (result.success) return result.data;
+  if (result.success) return { data: result.data };
 
   const errors = {};
   for (const issue of result.error.issues) {
     errors[issue.path.join('.')] ??= issue.message;
   }
-  res.status(400).json({ errors });
+  return { errors };
+}
+
+// Returns the cleaned patient, or sends a 400 with its errors.
+function validate(body, res) {
+  const { data, errors } = parsePatient(body);
+  if (errors) res.status(400).json({ errors });
+  return data;
 }
 
 // Ids are positive integers; anything else can't match a patient.
 const parseId = (param) => (/^\d{1,9}$/.test(param) ? Number(param) : undefined);
 
 const app = express();
-app.use(express.json());
+// Large enough for a CSV import of MAX_IMPORT_ROWS patients (about 2 MB).
+app.use(express.json({ limit: '5mb' }));
 app.use(sessions);
 
 // Logging in and out are the only routes open without a session.
@@ -152,6 +162,46 @@ app.put('/api/patients/:id', async (req, res) => {
     return res.status(404).json({ error: 'Patient not found' });
   }
   res.json(patient);
+});
+
+// CSV import (PRODUCT.md §8). The browser reads the file and maps its columns,
+// then sends FHIR-shaped patients, as POST /api/patients takes. Each one is
+// checked and sorted (see import.js). With dryRun, only that plan is returned,
+// for the provider to review; otherwise the new patients are created, plus
+// the possible duplicates if the provider chose to include them.
+const MAX_IMPORT_ROWS = 5000;
+const importSchema = z.object({
+  patients: z.array(z.unknown()).min(1).max(MAX_IMPORT_ROWS),
+  dryRun: z.boolean().default(false),
+  includeDuplicates: z.boolean().default(false),
+});
+
+app.post('/api/patients/_import', async (req, res) => {
+  const body = importSchema.safeParse(req.body ?? {});
+  if (!body.success) {
+    return res.status(400).json({ error: `Send 1 to ${MAX_IMPORT_ROWS} patients; dryRun and includeDuplicates are booleans` });
+  }
+  const { patients, dryRun, includeDuplicates } = body.data;
+  const rows = patients.map(parsePatient);
+  const birthDates = [...new Set(rows.filter((row) => row.data).map((row) => row.data.birthDate))];
+  const { matchedIds, ...plan } = planImport(rows, await findPatientsBornOn(birthDates));
+  // The plan reveals which patients are already on file, so it's logged like
+  // a search, before responding.
+  await audit(req, 'query', { patientIds: matchedIds });
+  if (dryRun) return res.json(plan);
+
+  const toCreate = [...plan.ready, ...(includeDuplicates ? plan.duplicates.map((d) => d.index) : [])];
+  let created = 0;
+  if (toCreate.length) {
+    // One transaction: the whole import and its audit entry, or nothing.
+    await transaction(async (tx) => {
+      const ids = [];
+      for (const index of toCreate) ids.push((await createPatient(rows[index].data, tx)).id);
+      await audit(req, 'create', { patientIds: ids }, tx);
+      created = ids.length;
+    });
+  }
+  res.json({ ...plan, created });
 });
 
 app.delete('/api/patients/:id', async (req, res) => {

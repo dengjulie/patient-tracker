@@ -89,6 +89,7 @@ patient-tracker/
 ├── server/              Express API
 │   ├── index.js         routes and request validation (Zod)
 │   ├── db.js            schema and every SQL query
+│   ├── import.js        sorts CSV import rows (new, already imported, duplicate, invalid)
 │   ├── audit.js         records audit log entries
 │   ├── auth.js          passwords, sessions, login/logout
 │   ├── constants.js     FHIR status codes and US states
@@ -103,6 +104,8 @@ patient-tracker/
         ├── LoginPage.jsx    login form
         ├── PatientsPage.jsx patient table, search, status filter, paging
         ├── PatientForm.jsx  add/edit modal and delete confirmation
+        ├── ImportPatients.jsx CSV import: choose file, map columns, review
+        ├── csvImport.js     turns CSV rows into patients for the API
         ├── api.js           every backend call; browser-side idle logoff
         └── format.js        name, date and age formatting
 ```

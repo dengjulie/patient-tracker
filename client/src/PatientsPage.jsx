@@ -5,6 +5,7 @@ import { notifications } from '@mantine/notifications';
 import { api } from './api.js';
 import { age, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
 import PatientForm from './PatientForm.jsx';
+import ImportPatients from './ImportPatients.jsx';
 
 const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 25;
@@ -27,6 +28,7 @@ export default function PatientsPage({ user, onLogout }) {
   const [referenceError, setReferenceError] = useState('');
   // undefined = form closed, null = adding a patient, object = editing that patient
   const [editing, setEditing] = useState(undefined);
+  const [importing, setImporting] = useState(false);
   // Bumped after a save or delete to reload the list, even if the query is unchanged.
   const [refreshCount, setRefreshCount] = useState(0);
   const [search, setSearch] = useState('');
@@ -109,6 +111,16 @@ export default function PatientsPage({ user, onLogout }) {
     reload();
   }
 
+  function handleImported({ created, skipped }) {
+    setImporting(false);
+    notifications.show({
+      color: 'green',
+      title: `Imported ${created} ${created === 1 ? 'patient' : 'patients'}`,
+      message: skipped ? `${skipped} ${skipped === 1 ? 'row was' : 'rows were'} skipped.` : undefined,
+    });
+    reload();
+  }
+
   const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
   const filtering = Boolean(filters.search || filters.status);
   const firstShown = (page - 1) * PAGE_SIZE + 1;
@@ -136,6 +148,9 @@ export default function PatientsPage({ user, onLogout }) {
             <Button variant="default" size="xs" onClick={onLogout}>
               Log out
             </Button>
+            <Button variant="default" onClick={() => setImporting(true)} disabled={!statuses.length}>
+              Import CSV
+            </Button>
             <Button onClick={() => setEditing(null)} disabled={!statuses.length}>
               Add patient
             </Button>
@@ -152,6 +167,10 @@ export default function PatientsPage({ user, onLogout }) {
             onDeleted={handleDeleted}
             onStale={reload}
           />
+        )}
+
+        {importing && (
+          <ImportPatients reference={reference} onClose={() => setImporting(false)} onImported={handleImported} />
         )}
 
         <Group align="flex-end" grow preventGrowOverflow={false}>

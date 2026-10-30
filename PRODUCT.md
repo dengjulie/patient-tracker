@@ -262,11 +262,52 @@ Every entry also records the IP address of the request.
   on the Later list. Since HIPAA requires regular review, it's a high
   priority.
 
+## 8. Importing patients from CSV
+
+Practices moving off a spreadsheet or another system need to bring their
+patients with them. Typing hundreds in by hand isn't realistic. We follow the
+pattern of widely used importers (HubSpot, Salesforce, Mailchimp): **upload,
+map columns, review, import.**
+
+- **The provider maps the columns.** Every spreadsheet names its columns
+  differently ("DOB", "Birth Date", "Date of Birth"). One dropdown per patient
+  field picks the column, pre-selected when the header is a common name for
+  it, with the first row's value shown to confirm. Columns that aren't chosen
+  (insurance, notes) are not imported.
+- **Status must be mapped to a column.** There is no file-wide default: a
+  migration of active patients and a waitlist spreadsheet need different
+  statuses, and a wrong default would mislabel every row. Labels and codes
+  both work ("On hold" or "onhold").
+- **Same rules as the form.** Every row is validated exactly like a patient
+  added by hand.
+- **Bad rows are skipped, not fatal.** The valid rows are imported, and each
+  problem is listed by spreadsheet row number with the form's message
+  ("Row 7: Enter a valid date of birth"), so it can be fixed in the file.
+- **Re-importing is safe.** A row whose name, preferred name, date of birth
+  and address exactly match a patient already on file (ignoring case and
+  status) is skipped as already imported. Fix the bad rows, upload the same
+  file again, and only those rows are added. Status is ignored so a patient
+  who moved from Planned to Active since isn't imported twice.
+- **Possible duplicates: warn, then confirm.** A row with the same first
+  name, family name and date of birth as a patient on file, or as another
+  row, but other details different, is listed before importing. The
+  provider decides whether to import it. It isn't skipped automatically,
+  because two different people can share a name and birthday.
+- **Common spreadsheet formats are accepted:** dates as `3/12/1984` or
+  `1984-03-12`; state names or codes; ZIPs whose leading zero the
+  spreadsheet dropped (`2134` is read as `02134`, since no US ZIP is shorter
+  than 5 digits). Two-digit years (`3/12/84`) are rejected as ambiguous.
+- **Limits:** 5,000 rows per file, plenty for a practice. Hospital-scale
+  migrations would use a bulk interface such as FHIR Bulk Data instead.
+- **Audited:** the import is one audit entry listing every patient it
+  created. Matching against existing patients reveals who is on file, so
+  that check is logged too, like a search.
+
 ## MVP scope
 
 The MVP is the **bare minimum** code that meets the requirements with the
 decisions above: log in; add, list, search/filter, edit, and delete patients;
-and an audit log of those actions. Everything else
+import patients from CSV; and an audit log of those actions. Everything else
 goes on the list below.
 
 ## Later (post-MVP)
@@ -282,13 +323,9 @@ goes on the list below.
     it may need bulk inserts for millions of rows.
 
 **Product features**
-- **Import patients from CSV**, for practices moving over from spreadsheets
-  or another system. Considerations:
-  - Validate every row with the same rules as the form, and show a per-row
-    error report instead of failing the whole file.
-  - Flag likely duplicates (same name + date of birth) before importing.
-  - Map spreadsheet columns to our fields (e.g. "DOB" → date of birth).
-  - Record the import in the audit log.
+- **CSV import follow-ups:** download the skipped rows as a CSV to fix;
+  Excel (.xlsx) files directly; remember a practice's column mapping;
+  splitting a single "Full name" column into name parts.
 - **Audit log review screen** (high priority: HIPAA requires regular
   review), plus database-level append-only enforcement, before/after values
   for edits, and a retention policy (commonly 6 years)

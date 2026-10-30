@@ -237,6 +237,16 @@ export async function patientExists(id, db = pool) {
   return rowCount > 0;
 }
 
+// Current patients (not entered in error) born on any of these dates. The CSV
+// import uses this to find patients a file may already contain.
+export async function findPatientsBornOn(birthDates, db = pool) {
+  const { rows } = await db.query(
+    `SELECT * FROM patients WHERE birth_date = ANY($1::date[]) AND status <> $2`,
+    [birthDates, ENTERED_IN_ERROR]
+  );
+  return rows.map(toPatient);
+}
+
 // Only seed.js uses this, to spread fake patients' history over time so the
 // demo list (sorted by updated_at) looks like real use.
 export async function setPatientTimestamps(id, { createdAt, updatedAt }, db = pool) {
