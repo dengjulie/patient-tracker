@@ -330,8 +330,6 @@ birth dates) and **audit log entries** (patient ids). Rules that follow:
 
 **What we build for the MVP:**
 
-**What we build for the MVP:**
-
 | HIPAA safeguard | Decision | Why |
 | --- | --- | --- |
 | Access control | **Login required** for every page and API call. | Each person has their own account, so actions can be traced to them. |
@@ -342,7 +340,7 @@ birth dates) and **audit log entries** (patient ids). Rules that follow:
 | Automatic logoff | **Sessions end after 15 minutes of inactivity.** Anything typed in an unsaved form is **discarded**, not restored after logging back in. | Unattended screens in clinics are a common exposure. Restoring drafts would mean keeping unsaved patient data in the browser. |
 | Audit controls | **An append-only audit log** (details below). | HIPAA requires it (164.312(b)), and it's how snooping, bad edits and breaches get investigated. |
 | Data in URLs | **Search terms are sent in the request body, never the URL.** | URLs end up in logs and browser history; leaking names and birth dates through them is a common exposure. |
-| Shoulder surfing | **The list shows City, State only**; the full address appears when editing. | Shows what's needed to recognize a patient, nothing more. |
+| Shoulder surfing | **The list shows City, State only**; the full address appears when a patient is opened. | Shows what's needed to recognize a patient, nothing more. |
 
 **The audit log.** HIPAA requires recording activity (164.312(b)) and
 regularly reviewing it (164.308(a)(1)(ii)(D)). It doesn't say what to log,
@@ -433,8 +431,7 @@ goes on the list below.
   Excel (.xlsx) files directly; remember a practice's column mapping;
   splitting a single "Full name" column into name parts.
 - **Audit log review screen** (high priority: HIPAA requires regular
-  review), plus database-level append-only enforcement, before/after values
-  for edits, and a retention policy (commonly 6 years)
+  review), plus before/after values for edits, and a retention policy (commonly 6 years)
 - **`npm run audit-log` hardening**, deferred while it's a small terminal
   tool:
   - `--since` should start at local midnight; today it uses the database's
@@ -457,7 +454,6 @@ goes on the list below.
   and reduce duplicate patients
 - Partial birth dates (FHIR allows `1984` or `1984-03`) for patients whose
   exact date of birth is unknown
-- A detail view per patient (with the `GET /api/patients/:id` endpoint)
 - A reason for each status change ("lost to follow-up" vs "moved away") and
   status history
 - Multiple names per patient beyond a preferred name, e.g. maiden names or

@@ -377,7 +377,7 @@ created by `initDb`, because the app login can't create tables.
   - We don't use Unix timestamps, for the same reason, and because they're
     negative for anyone born before 1970.
 - **Sort order:** most recently updated first (`updated_at DESC, id DESC`),
-  backed by the `patients_updated_at_idx` index so a page is read straight
+  backed by the `patients_practice_updated_idx` index so a page is read straight
   from the index. The seed spreads fake patients' `created_at`/`updated_at`
   over two years (edge cases: the last few hours, so they lead page 1).
 - **No migrations tool.** Tables are created on startup if missing. While the
@@ -494,8 +494,10 @@ All routes except `/api/session` return `401` without a valid session.
 - **Idle logoff:** `maxAge` is 15 minutes with `rolling: true`. Every request
   pushes the expiry back to 15 minutes from now, so the session ends after 15
   minutes of *inactivity*.
-- **Who sees what:** any logged-in provider sees all patients (PRODUCT.md §7),
-  so `requireAuth` only checks that someone is logged in.
+- **Who sees what:** a provider sees every patient in their own practice
+  (PRODUCT.md §7), so `requireAuth` only checks that someone is logged in and
+  the session has a practice; [Practice isolation](#practice-isolation) does
+  the rest.
 
 ## Practice isolation
 
@@ -574,9 +576,10 @@ The design comes from PRODUCT.md §7. In code:
 - **Searches fail closed:** the `query` entry, with the ids of every patient
   in the results, is written *before* the response is sent. If it fails, the
   provider gets a 500 and no results.
-- **Append-only:** the app has no code that updates or deletes audit rows.
-  Enforcing this in the database itself (revoking `UPDATE`/`DELETE`) is on
-  the Later list.
+- **Append-only, twice over:** the app has no code that updates or deletes
+  audit rows, and its database login has only `SELECT` and `INSERT` on
+  `audit_log`, so it couldn't even if it tried (tested in
+  `isolation.test.js`).
 - **Reviewing it:** `npm run audit-log` in `server/` (`audit-log.js`) prints the
   log newest first, with practice and user names instead of ids. Filters
   combine: `--patient 42` (who saw or changed patient 42), `--user <email>`,
@@ -718,5 +721,5 @@ Planned scale work and future features are tracked in
 4. ✅ **Login**: provider accounts (created by script), sessions, 15-minute idle logoff
 5. ✅ **Audit log**: record who viewed, created, edited or deleted which patient
 6. ✅ **Frontend**: login screen; patient table with debounced live search and status filter
-7. ✅ **Frontend**: add/edit modal form (inline errors) and delete with confirmation
+7. ✅ **Frontend**: add/edit form (inline errors) and delete with confirmation, later moved into the side panel
 8. ✅ **CSV import**: map columns, review a dry run, import valid rows; re-imports skip rows already on file
