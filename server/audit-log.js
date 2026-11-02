@@ -2,19 +2,19 @@
 // too: it links patients to who looked at them, so treat the output like
 // patient data.
 //
-//   npm run audit                                 latest 50 entries
-//   npm run audit -- --patient 42                 who saw or changed patient 42
-//   npm run audit -- --user demo@example.com      what one provider did
-//   npm run audit -- --practice "Demo Practice"   one practice's log
-//   npm run audit -- --action login_failed        e.g. failed logins
-//   npm run audit -- --since 2026-11-01 --limit 200
+//   npm run audit-log                                 latest 50 entries
+//   npm run audit-log -- --patient 42                 who saw or changed patient 42
+//   npm run audit-log -- --user demo@example.com      what one provider did
+//   npm run audit-log -- --practice "Demo Practice"   one practice's log
+//   npm run audit-log -- --action login_failed        e.g. failed logins
+//   npm run audit-log -- --since 2026-11-01 --limit 200
 //
 // Filters combine. Uses the owner login, so it sees every practice.
 import { parseArgs } from 'node:util';
 import { listAuditEntries, closePools, AUDIT_ACTIONS } from './db.js';
 
-const USAGE = `Usage: npm run audit -- [--patient <id>] [--user <email>] [--practice <name>]
-                          [--action <${AUDIT_ACTIONS.join('|')}>] [--since <YYYY-MM-DD>] [--limit <n>]`;
+const USAGE = `Usage: npm run audit-log -- [--patient <id>] [--user <email>] [--practice <name>]
+                              [--action <${AUDIT_ACTIONS.join('|')}>] [--since <YYYY-MM-DD>] [--limit <n>]`;
 
 let options;
 try {

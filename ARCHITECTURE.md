@@ -100,7 +100,7 @@ patient-tracker/
 │   ├── import.js       sorts CSV import rows: ready, already imported, duplicates, invalid
 │   ├── index.js        starts the API (checks its database login, then listens)
 │   ├── migrate.js      sets up the database as the owner (npm run migrate)
-│   ├── audit-log.js    shows the audit log in the terminal (npm run audit)
+│   ├── audit-log.js    shows the audit log in the terminal (npm run audit-log)
 │   ├── app.js          Express routes + Zod validation; exported so tests can use it
 │   ├── seed.js         demo logins + 5 edge-case patients + generated ones (Faker, fixed seed)
 │   └── test/           node:test suites; integration ones use a throwaway database
@@ -572,7 +572,7 @@ The design comes from PRODUCT.md §7. In code:
 - **Append-only:** the app has no code that updates or deletes audit rows.
   Enforcing this in the database itself (revoking `UPDATE`/`DELETE`) is on
   the Later list.
-- **Reviewing it:** `npm run audit` in `server/` (`audit-log.js`) prints the
+- **Reviewing it:** `npm run audit-log` in `server/` (`audit-log.js`) prints the
   log newest first, with practice and user names instead of ids. Filters
   combine: `--patient 42` (who saw or changed patient 42), `--user <email>`,
   `--practice <name>` (exact name, any case), `--action <action>`, `--since <YYYY-MM-DD>`,

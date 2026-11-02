@@ -10,7 +10,7 @@
     "start": "node --env-file=.env index.js",
     "seed": "node --env-file=.env seed.js",
     "create-user": "node --env-file=.env create-user.js",
-    "audit": "node --env-file=.env audit-log.js"
+    "audit-log": "node --env-file=.env audit-log.js"
   },
   "keywords": [],
   "author": "",

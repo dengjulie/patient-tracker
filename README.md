@@ -86,7 +86,7 @@ All endpoints are listed in [ARCHITECTURE.md → API](ARCHITECTURE.md#api).
 | `npm run dev` | Run `migrate`, then start the API and restart it on file changes. |
 | `npm start` | Start the API (run `migrate` first after pulling changes). |
 | `npm run seed` | Create two demo practices with a login each: Demo Practice gets 5 hand-written edge-case patients and 250 generated ones, Second Demo Practice 20 generated ones, with realistic history spread over two years (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
-| `npm run audit` | Show the audit log, newest first. Filters combine: `-- --patient 42`, `--user demo@example.com`, `--practice "Demo Practice"`, `--action login_failed`, `--since 2026-11-01`, `--limit 200`. The output is PHI. |
+| `npm run audit-log` | Show the audit log, newest first. Filters combine: `-- --patient 42`, `--user demo@example.com`, `--practice "Demo Practice"`, `--action login_failed`, `--since 2026-11-01`, `--limit 200`. The output is PHI. |
 | `npm run create-user -- <email> "<name>" "<practice>"` | Create a provider account in a practice (created if new) and print a temporary password. There's no sign-up page by design ([PRODUCT.md §7](PRODUCT.md#7-security-and-privacy)). |
 
 To reset the database: `docker compose down -v && docker compose up -d`, then
@@ -125,7 +125,7 @@ patient-tracker/
 ├── server/              Express API
 │   ├── index.js         starts the API
 │   ├── migrate.js       sets up the database (npm run migrate)
-│   ├── audit-log.js     shows the audit log (npm run audit)
+│   ├── audit-log.js     shows the audit log (npm run audit-log)
 │   ├── app.js           routes and request validation (Zod)
 │   ├── db.js            schema and every SQL query
 │   ├── import.js        sorts CSV import rows (new, already imported, duplicate, invalid)

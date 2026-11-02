@@ -311,7 +311,7 @@ Every entry also records the IP address of the request.
 - **Append-only:** the app only ever adds entries; it has no code to change
   or delete them.
 - **Reviewing it:** for the MVP, with a terminal command for whoever runs the
-  system (`npm run audit`, filtered by patient, provider, practice, action or
+  system (`npm run audit-log`, filtered by patient, provider, practice, action or
   date). A review screen for practice admins is on the Later list. Since HIPAA requires regular review, it's a high
   priority.
 
