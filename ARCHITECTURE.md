@@ -77,6 +77,7 @@ flowchart TB
 | --- | --- | --- |
 | Front end | **React 19** (Vite) | Widely known; fast dev server; almost no config. |
 | UI components | **Mantine 9** | Every component we need (table, modal, searchable select, date input, notifications) from one library family. Its form library takes our API's dotted-path errors as-is. See [Why Mantine](#why-mantine). |
+| Icons | **@tabler/icons-react** | The icon set Mantine's own docs use; only the icons imported are bundled (the three form section icons add about 2 KB). |
 | Back end | **Express 5** | The smallest well-known Node HTTP framework. v5 forwards errors from async handlers automatically. |
 | Database | **PostgreSQL 17** via `pg`, run with Docker Compose | Real `DATE` and list (`TEXT[]`) types; `unaccent` for accent-insensitive name search; `pg_trgm` indexes when we reach hospital scale. It's what production health systems run. |
 | Sessions | **express-session** + **connect-pg-simple** | The standard Express session library, with sessions stored in our existing Postgres (no Redis). |

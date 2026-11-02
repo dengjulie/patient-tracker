@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Button, Fieldset, Group, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { IconClipboardText, IconHome, IconUser } from '@tabler/icons-react';
 import { api } from './api.js';
 
 const EMPTY_FORM = {
@@ -89,6 +90,21 @@ function today() {
 // provider's own name or address.
 const NO_AUTOFILL = { autoComplete: 'off', 'data-1p-ignore': true, 'data-lpignore': 'true' };
 
+// Section headings (Name, Details, Address): larger and bolder than the field
+// labels, with an icon, so the form reads as three groups.
+const SECTION_STYLES = { legend: { fontSize: 'var(--mantine-font-size-lg)', fontWeight: 700, marginBottom: 'var(--mantine-spacing-xs)' } };
+
+// A span, not a block element: a <legend> may only hold inline content. The
+// icon is decorative, so screen readers just read the heading.
+function SectionTitle({ icon: Icon, children }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--mantine-spacing-xs)' }}>
+      <Icon size={20} stroke={1.75} aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
 // The add/edit form, shown in the patient side panel (PatientDrawer).
 // `patient` is the patient being edited, or null to add a new one.
 // `submitting` lives in the panel, which can't be closed while it's true.
@@ -160,19 +176,27 @@ export default function PatientForm({ patient, reference, submitting, setSubmitt
     }
   }
 
-  const field = (path) => ({ ...form.getInputProps(path), ...NO_AUTOFILL });
+  // Every field: its value and error, no autofill, and its hint (e.g. "If the
+  // patient has only one name…") under the box, where it's read after the
+  // label and next to what's typed, with any error last.
+  const field = (path) => ({
+    ...form.getInputProps(path),
+    ...NO_AUTOFILL,
+    inputWrapperOrder: ['label', 'input', 'description', 'error'],
+  });
   const selectedStatus = reference.statuses.find((s) => s.code === form.values.status);
 
   return (
     <form onSubmit={form.onSubmit(handleSubmit)} noValidate>
-      <Stack gap="lg">
+      {/* More space between sections than between the fields inside them. */}
+      <Stack gap="xl">
         {formError && (
           <Alert color="red" variant="light">
             {formError}
           </Alert>
         )}
 
-        <Fieldset legend="Name" variant="unstyled">
+        <Fieldset legend={<SectionTitle icon={IconUser}>Name</SectionTitle>} variant="unstyled" styles={SECTION_STYLES}>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <TextInput label="First (given) name" data-autofocus {...field('name.first')} />
             <TextInput label="Middle name(s)" {...field('name.middle')} />
@@ -192,7 +216,7 @@ export default function PatientForm({ patient, reference, submitting, setSubmitt
           </SimpleGrid>
         </Fieldset>
 
-        <Fieldset legend="Details" variant="unstyled">
+        <Fieldset legend={<SectionTitle icon={IconClipboardText}>Details</SectionTitle>} variant="unstyled" styles={SECTION_STYLES}>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <TextInput label="Date of birth" type="date" max={today()} withAsterisk {...field('birthDate')} />
             <Select
@@ -214,7 +238,7 @@ export default function PatientForm({ patient, reference, submitting, setSubmitt
           </SimpleGrid>
         </Fieldset>
 
-        <Fieldset legend="Address" variant="unstyled">
+        <Fieldset legend={<SectionTitle icon={IconHome}>Address</SectionTitle>} variant="unstyled" styles={SECTION_STYLES}>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
             <TextInput label="Street" withAsterisk {...field('address.street')} />
             <TextInput label="Apt / unit" {...field('address.unit')} />
