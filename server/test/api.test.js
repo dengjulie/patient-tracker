@@ -207,3 +207,18 @@ test('a last name is required; the first name is optional, for patients with one
   assert.equal(middleWithoutFirst.status, 400);
   assert.deepEqual((await middleWithoutFirst.json()).errors, { 'name.given': 'Enter a first name before any middle names' });
 });
+
+test('a patient just opened is in recent patients, even behind more recently updated ones', async () => {
+  const asA = await loginAs('a@test.example');
+  // Eleven new patients: all updated after alpha, and all "added" by A.
+  for (let i = 0; i < 11; i += 1) {
+    await asA('POST', '/patients', { body: samplePatient({ given: [`New${i}`], family: 'Recent' }) });
+  }
+  await asA('GET', `/patients/${alpha.id}`);
+
+  const { patients } = await (await asA('GET', '/patients/_recent')).json();
+  assert.equal(patients.length, 10);
+  assert.ok(patients.some((p) => p.id === alpha.id), 'the patient just opened is included');
+  const updated = patients.map((p) => p.updatedAt);
+  assert.deepEqual(updated, [...updated].sort().reverse(), 'sorted by last updated, newest first');
+});

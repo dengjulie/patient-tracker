@@ -149,9 +149,10 @@ retention laws). A permanent delete also can't be undone after a misclick.
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
 - **Your recent patients:** a **Show my recent patients** button lists the
-  patients this provider **opened, added or edited** in the last 30 days:
-  the 10 most recently updated, sorted like the Updated column so the
-  table's order is visible in it.
+  10 patients this provider most recently **opened, added or edited** in
+  the last 30 days, sorted like the Updated column so the table's order is
+  visible in it. Which 10 is decided by the provider's activity, so a
+  patient they just opened always appears.
   - **The 30 days are the provider's own activity, not the Updated date.**
     The text under the heading says so ("Patients you've opened, added or
     edited in the last 30 days. Sorted by when the record was last

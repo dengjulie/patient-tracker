@@ -444,22 +444,28 @@ export async function updatePatient(db, id, patient, ifUpdatedAt) {
   return toPatient(rows[0]);
 }
 
-// Patients this provider opened, added or edited in the last `days` days
-// (from their own audit entries, which already record exactly this), most
-// recently updated first, like the list's Updated column.
+// The `limit` patients this provider most recently opened, added or edited
+// in the last `days` days (from their own audit entries, which already record
+// exactly this), shown most recently updated first, like the list's Updated
+// column. Who's included goes by the provider's activity, so a patient they
+// just opened always appears; only the order goes by the record's update.
 export async function listRecentPatients(db, userId, { limit = 10, days = 30 } = {}) {
   const { rows } = await db.query(
-    `SELECT * FROM patients
-     WHERE id IN (
-       SELECT unnest(patient_ids) FROM audit_log
-       WHERE user_id = $1
-         AND action IN ('read', 'create', 'update')
-         AND occurred_at > now() - make_interval(days => $2::int)
-     )
-       AND practice_id = $3
-       AND status <> $4
-     ORDER BY updated_at DESC, id DESC
-     LIMIT $5`,
+    `SELECT * FROM (
+       SELECT patients.* FROM patients
+       JOIN (
+         SELECT patient_id, max(occurred_at) AS last_activity
+         FROM audit_log, unnest(patient_ids) AS patient_id
+         WHERE user_id = $1
+           AND action IN ('read', 'create', 'update')
+           AND occurred_at > now() - make_interval(days => $2::int)
+         GROUP BY patient_id
+       ) activity ON activity.patient_id = patients.id
+       WHERE patients.practice_id = $3 AND patients.status <> $4
+       ORDER BY activity.last_activity DESC, patients.id DESC
+       LIMIT $5
+     ) recent
+     ORDER BY updated_at DESC, id DESC`,
     [userId, days, db.practiceId, ENTERED_IN_ERROR, limit]
   );
   return rows.map(toPatient);
