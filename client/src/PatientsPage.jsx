@@ -7,6 +7,7 @@ import { displayName } from './format.js';
 import PatientDrawer from './PatientDrawer.jsx';
 import PatientTable from './PatientTable.jsx';
 import RecentPatients from './RecentPatients.jsx';
+import ListHeader from './ListHeader.jsx';
 import ImportPatients from './ImportPatients.jsx';
 
 const SEARCH_DELAY_MS = 300;
@@ -42,7 +43,8 @@ export default function PatientsPage({ user, onLogout }) {
   const [debouncedSearch] = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
   // A status on its own counts as a search: it's a worklist ("everyone on
   // the waitlist"), not the whole patient list.
-  const askedFor = Boolean(status) || search.trim().length >= MIN_SEARCH_LENGTH;
+  const typedSearch = search.trim().length >= MIN_SEARCH_LENGTH;
+  const askedFor = Boolean(status) || typedSearch;
   // Results show only while the provider is asking for them, so clearing the
   // box hides them at once, without waiting for the debounce.
   const searching = askedFor && (Boolean(status) || debouncedSearch.length >= MIN_SEARCH_LENGTH);
@@ -138,6 +140,23 @@ export default function PatientsPage({ user, onLogout }) {
     });
     reload();
   }
+
+  // What the list below shows, in the same title + description form as
+  // recent patients (see ListHeader).
+  const chosenStatus = statuses.find((s) => s.code === status);
+  const list = typedSearch
+    ? {
+        title: 'Search results',
+        description: chosenStatus
+          ? `Patients matching your search with the status ${chosenStatus.label}, most recently updated first.`
+          : 'Patients whose name or date of birth matches your search, most recently updated first.',
+        empty: 'No patients match your search.',
+      }
+    : {
+        title: `${chosenStatus?.label} patients`,
+        description: `${chosenStatus?.description} Most recently updated first.`,
+        empty: 'No patients have this status.',
+      };
 
   // The count under the heading: matches for a search, or recent patients.
   const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -261,18 +280,24 @@ export default function PatientsPage({ user, onLogout }) {
               onHide={() => setShowRecent(false)}
             />
           )
-        ) : patients === null && !error ? (
-          <Center py="xl">
-            <Loader />
-          </Center>
-        ) : patients?.length === 0 ? (
-          <Paper withBorder p="xl" radius="md">
-            <Text ta="center" c="dimmed">
-              No patients match your search.
-            </Text>
-          </Paper>
         ) : (
-          patients && <PatientTable patients={patients} statuses={statuses} onOpen={setViewingId} />
+          // Shown while loading too, so it doesn't pop in after the results.
+          <Stack gap="xs">
+            <ListHeader title={list.title} description={list.description} />
+            {patients === null && !error ? (
+              <Center py="xl">
+                <Loader />
+              </Center>
+            ) : patients?.length === 0 ? (
+              <Paper withBorder p="xl" radius="md">
+                <Text ta="center" c="dimmed">
+                  {list.empty}
+                </Text>
+              </Paper>
+            ) : (
+              patients && <PatientTable patients={patients} statuses={statuses} onOpen={setViewingId} />
+            )}
+          </Stack>
         )}
 
         {pageCount > 1 && patients?.length > 0 && (

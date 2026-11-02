@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Button, Center, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { Button, Center, Loader, Stack, Text } from '@mantine/core';
 import { api } from './api.js';
+import ListHeader from './ListHeader.jsx';
 import PatientTable from './PatientTable.jsx';
 
 // The provider's own recently opened, added or edited patients, shown only
@@ -27,19 +28,15 @@ export default function RecentPatients({ refreshKey, statuses, onOpen, onHide, o
 
   return (
     <Stack gap="xs">
-      <Group justify="space-between" align="flex-start">
-        <div>
-          <Title order={2} size="h4">
-            Your recent patients
-          </Title>
-          <Text size="sm" c="dimmed">
-            Patients you’ve opened, added or edited in the last 30 days, most recent first.
-          </Text>
-        </div>
-        <Button variant="subtle" size="xs" onClick={onHide}>
-          Hide
-        </Button>
-      </Group>
+      <ListHeader
+        title="Your recent patients"
+        description="Patients you’ve opened, added or edited in the last 30 days, most recent first."
+        action={
+          <Button variant="subtle" size="xs" onClick={onHide}>
+            Hide
+          </Button>
+        }
+      />
       {error ? (
         <Text size="sm" c="dimmed">
           {error}

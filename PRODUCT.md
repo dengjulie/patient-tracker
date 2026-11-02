@@ -181,6 +181,11 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - Searches and worklists don't count as "opened": appearing in results
     isn't working with a patient, and it would fill the list with whoever
     matched the last search.
+- **Every list says what it is:** search results, a status worklist and
+  recent patients each have a title and one line saying what's in it and
+  in what order (e.g. "Waitlist patients · Waiting for a spot before care
+  can begin. Most recently updated first."), in the same place, so the
+  table doesn't move when switching between them.
 - **Status filter:** works on its own or narrows a search. On its own it
   is a **worklist**, such as everyone on the waitlist or on hold, which
   providers need to work through without knowing names. It's still not a

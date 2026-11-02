@@ -145,6 +145,7 @@ patient-tracker/
         ├── PatientsPage.jsx patient table, search, status filter, paging
         ├── PatientDrawer.jsx side panel: view, add or edit a patient
         ├── PatientTable.jsx patient table (search results, recent patients)
+        ├── ListHeader.jsx   title and description above each patient list
         ├── RecentPatients.jsx your recent patients, shown before searching
         ├── PatientForm.jsx  add/edit form and delete confirmation
         ├── ImportPatients.jsx CSV import: choose file, map columns, review
