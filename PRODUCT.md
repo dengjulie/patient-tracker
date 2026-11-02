@@ -160,8 +160,10 @@ retention laws). A permanent delete also can't be undone after a misclick.
     The text under the heading says so ("Patients you've opened, added or
     edited in the last 30 days, most recent first"), since a patient
     updated last week by someone else isn't in the list until this
-    provider has opened them. The Updated column still shows when the
-    record itself last changed, which doesn't follow the list's order.
+    provider has opened them.
+  - **No Updated column here.** It showed when anyone last changed the
+    record, which didn't follow the list's order and read like a broken
+    sort. Search results and worklists keep it: they *are* sorted by it.
   - **Only on request:** like search, nothing is shown until the provider
     asks. The list hides again when they search, choose a status or click
     Hide, so each time it appears is a deliberate, audited request. It covers the common "the patient I saw this

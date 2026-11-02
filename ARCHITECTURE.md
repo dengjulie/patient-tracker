@@ -620,8 +620,10 @@ The design comes from PRODUCT.md §7. In code:
   only after the provider clicks **Show my recent patients**; typing a
   search, choosing a status or clicking Hide hides it again (a `showRecent`
   flag, cleared in those handlers rather than an effect). It fetches when
-  shown and again after a save (the list's refresh counter). It uses the same `PatientTable` as the
-  search results.
+  shown and again after a save (the list's refresh counter). It uses the
+  same `PatientTable` as the search results, with `showUpdated={false}`:
+  the list is in viewing order, so an Updated column would look like a
+  sort that isn't followed.
 - **Side panel** (`PatientDrawer.jsx`): one Mantine `Drawer` for viewing,
   adding and editing. `PatientsPage` holds two pieces of state: `viewingId`
   (the patient shown) and `editing` (`undefined` = no form, `null` = adding,
