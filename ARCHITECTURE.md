@@ -13,13 +13,14 @@ flowchart TB
         Login["LoginPage.jsx"]
         List["PatientsPage.jsx<br/>table, search, filter, paging"]
         View["PatientDrawer.jsx<br/>read-only patient view"]
+        Recent["RecentPatients.jsx<br/>your recent patients"]
         Form["PatientForm.jsx<br/>add, edit, delete"]
         Import["ImportPatients.jsx<br/>CSV: map columns, review, import"]
         Api["api.js<br/>every API call<br/>15-minute idle clock"]
         App --> Login & List
-        List --> View & Form & Import
+        List --> Recent & View & Form & Import
         View --> Form
-        Login & List & View & Form & Import --> Api
+        Login & List & Recent & View & Form & Import --> Api
     end
 
     Vite["Vite dev server :5173<br/>proxies /api to :3001"]
@@ -106,6 +107,8 @@ patient-tracker/
         ├── LoginPage.jsx
         ├── PatientsPage.jsx  table, debounced search, status filter, paging
         ├── PatientDrawer.jsx read-only patient view (side drawer); logs a read
+        ├── PatientTable.jsx  patient table, shared by search results and recent patients
+        ├── RecentPatients.jsx the provider's recent patients, before searching
         ├── PatientForm.jsx   add/edit modal, delete confirmation
         ├── ImportPatients.jsx CSV import modal: choose file, map columns, review
         ├── csvImport.js      CSV row -> API patient; column-name guesses; date/ZIP/state fixes
@@ -278,6 +281,9 @@ ids, never names or search terms.
 | `attempted_email` | `TEXT` | nullable | Failed logins only. |
 | `ip_address` | `TEXT` | nullable | From the request. |
 
+Index `audit_log_user_idx` on `(user_id, occurred_at)` serves recent patients,
+which reads one provider's last 30 days.
+
 - **No foreign key on `patient_ids`:** Postgres can't enforce foreign keys on
   items inside a list. This is safe because patient rows are never deleted,
   so the ids always stay valid.
@@ -321,6 +327,7 @@ code. It's listed so the whole database is documented in one place.
 | DELETE | `/api/session` | Log out. Returns `204`. |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
 | POST | `/api/patients/_search` | One page of matching patients, excluding entered-in-error. Body: `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }`. Needs a `search` of at least 2 characters or a `status` (search-first); the rest are optional (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
+| GET | `/api/patients/_recent` | The logged-in provider's 10 most recently opened (`read`), added or edited patients in the last 30 days, from their audit entries. Returns `{ patients }`; logged as a `query`. Declared before `/:id`. |
 | GET | `/api/patients/:id` | One patient's full record, for the patient view. Logged as a `read` before responding. `404` if unknown or entered in error. |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. Send `If-Match: "<updatedAt>"` (the value the editor loaded) to refuse the save if someone changed the patient since; the form always does. |
@@ -433,6 +440,10 @@ The design comes from PRODUCT.md §7. In code:
 - **Imports:** one `create` entry listing every imported patient, in the
   same transaction as the inserts, plus a `query` entry for the patients on
   file that the rows matched.
+- **Recent patients are read from it:** `listRecentPatients` takes the
+  provider's `read`, `create` and `update` entries from the last 30 days,
+  unnests their `patient_ids`, and keeps each patient's latest time. Showing
+  the list writes a `query` entry, which doesn't feed back into it.
 - **Opening a patient** writes a `read` entry before the record is sent,
   failing closed like a search.
 - **Searches fail closed:** the `query` entry, with the ids of every patient
@@ -475,6 +486,11 @@ The design comes from PRODUCT.md §7. In code:
   - **No separate loading flag:** each result is stored with the query it
     answers, so "loading" is derived: the newest result is for an older
     query. The previous rows stay visible meanwhile.
+- **Recent patients** (`RecentPatients.jsx`): shown under the search prompt
+  while there's no search or status. It fetches on mount and again after a
+  save (the list's refresh counter), and shows nothing while loading or if
+  empty, so the page doesn't flicker. It uses the same `PatientTable` as the
+  search results.
 - **Patient view** (`PatientDrawer.jsx`): a Mantine `Drawer`.
   - **Fetched, not reused:** the list already holds each patient, but the
     drawer calls `GET /api/patients/:id` so opening it is logged as a `read`.

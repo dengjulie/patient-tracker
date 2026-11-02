@@ -73,6 +73,9 @@ export async function initDb() {
       attempted_email TEXT,
       ip_address      TEXT
     );
+    -- For each provider's recent patients (listRecentPatients).
+    CREATE INDEX IF NOT EXISTS audit_log_user_idx ON audit_log (user_id, occurred_at);
+
     -- Recreated on every start, so a database made before an action was
     -- added to AUDIT_ACTIONS accepts it too.
     ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;
@@ -236,6 +239,28 @@ export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
     [...toRow(patient), id, ifUpdatedAt ?? null]
   );
   return toPatient(rows[0]);
+}
+
+// The patients this provider most recently opened, added or edited, newest
+// first, from their own audit entries in the last `days` days. The audit log
+// already records exactly this, so no separate "recent" table is needed.
+export async function listRecentPatients(userId, { limit = 10, days = 30 } = {}) {
+  const { rows } = await pool.query(
+    `SELECT patients.* FROM patients
+     JOIN (
+       SELECT patient_id, max(occurred_at) AS last_seen
+       FROM audit_log, unnest(patient_ids) AS patient_id
+       WHERE user_id = $1
+         AND action IN ('read', 'create', 'update')
+         AND occurred_at > now() - make_interval(days => $2::int)
+       GROUP BY patient_id
+     ) recent ON recent.patient_id = patients.id
+     WHERE patients.status <> $3
+     ORDER BY recent.last_seen DESC
+     LIMIT $4`,
+    [userId, days, ENTERED_IN_ERROR, limit]
+  );
+  return rows.map(toPatient);
 }
 
 // One patient, unless it was entered in error (hidden everywhere, like the list).

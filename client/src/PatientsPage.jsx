@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Alert, Anchor, Badge, Button, Center, Container, Group, Loader, Pagination, Paper, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Button, Center, Container, Group, Loader, Pagination, Paper, Select, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { api } from './api.js';
-import { STATUS_COLORS, age, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
+import { displayName } from './format.js';
 import PatientForm from './PatientForm.jsx';
 import PatientDrawer from './PatientDrawer.jsx';
+import PatientTable from './PatientTable.jsx';
+import RecentPatients from './RecentPatients.jsx';
 import ImportPatients from './ImportPatients.jsx';
 
 const SEARCH_DELAY_MS = 300;
@@ -125,7 +127,6 @@ export default function PatientsPage({ user, onLogout }) {
     reload();
   }
 
-  const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
   const firstShown = (page - 1) * PAGE_SIZE + 1;
   const lastShown = firstShown + (patients?.length ?? 0) - 1;
 
@@ -215,13 +216,16 @@ export default function PatientsPage({ user, onLogout }) {
         ))}
 
         {!askedFor ? (
-          <Paper withBorder p="xl" radius="md">
-            <Text ta="center" c="dimmed">
-              {search.trim()
-                ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
-                : 'Search by name or date of birth, or choose a status, to find patients.'}
-            </Text>
-          </Paper>
+          <>
+            <Paper withBorder p="xl" radius="md">
+              <Text ta="center" c="dimmed">
+                {search.trim()
+                  ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
+                  : 'Search by name or date of birth, or choose a status, to find patients.'}
+              </Text>
+            </Paper>
+            <RecentPatients refreshKey={refreshCount} statuses={statuses} onOpen={setViewingId} />
+          </>
         ) : patients === null && !error ? (
           <Center py="xl">
             <Loader />
@@ -233,56 +237,7 @@ export default function PatientsPage({ user, onLogout }) {
             </Text>
           </Paper>
         ) : (
-          patients && (
-            <Paper withBorder radius="md">
-              <Table.ScrollContainer minWidth={760}>
-                <Table striped highlightOnHover verticalSpacing="sm">
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Name</Table.Th>
-                      <Table.Th>Date of birth</Table.Th>
-                      <Table.Th>Status</Table.Th>
-                      <Table.Th>City, State</Table.Th>
-                      <Table.Th>Updated</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {patients.map((patient) => (
-                      // The whole row opens the patient for mouse users; the name is a
-                      // real button so keyboard and screen-reader users can too. Its
-                      // click (including Enter/Space) bubbles up to the row's handler.
-                      <Table.Tr key={patient.id} onClick={() => setViewingId(patient.id)} style={{ cursor: 'pointer' }}>
-                        <Table.Td>
-                          <Anchor component="button" type="button" fw={500} c="inherit">
-                            {displayName(patient)}
-                          </Anchor>
-                        </Table.Td>
-                        <Table.Td>
-                          {formatDate(patient.birthDate)}{' '}
-                          <Text span c="dimmed" size="sm">
-                            ({age(patient.birthDate)} yrs)
-                          </Text>
-                        </Table.Td>
-                        <Table.Td>
-                          <Badge color={STATUS_COLORS[patient.status]} variant="light">
-                            {statusLabel(patient.status)}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td>
-                          {patient.address.city}, {patient.address.state}
-                        </Table.Td>
-                        <Table.Td c="dimmed" fz="sm">
-                          <time dateTime={patient.updatedAt} title={formatTimestamp(patient.updatedAt)}>
-                            {formatUpdated(patient.updatedAt)}
-                          </time>
-                        </Table.Td>
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              </Table.ScrollContainer>
-            </Paper>
-          )
+          patients && <PatientTable patients={patients} statuses={statuses} onOpen={setViewingId} />
         )}
 
         {pageCount > 1 && patients?.length > 0 && (

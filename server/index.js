@@ -8,6 +8,7 @@ import {
   updatePatient,
   patientExists,
   findPatient,
+  listRecentPatients,
   findPatientsBornOn,
   markEnteredInError,
   transaction,
@@ -131,6 +132,15 @@ app.post('/api/patients/_search', async (req, res) => {
   // Only the patients on this page were shown, so only they are logged.
   await audit(req, 'query', { patientIds: patients.map((p) => p.id) });
   res.json({ patients, total, page: query.data.page, pageSize: query.data.pageSize });
+});
+
+// The provider's own recent patients, shown before they search (PRODUCT.md §6).
+// Showing them is logged like a search. Declared before /:id so "_recent"
+// isn't taken for an id.
+app.get('/api/patients/_recent', async (req, res) => {
+  const patients = await listRecentPatients(req.session.user.id);
+  await audit(req, 'query', { patientIds: patients.map((p) => p.id) });
+  res.json({ patients });
 });
 
 // One patient's full record, for the patient view. Opening a record is logged

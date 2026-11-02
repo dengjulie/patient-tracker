@@ -134,6 +134,18 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - Typing "maria garcia" finds *Maria Elena Garcia*, because each word is
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
+- **Your recent patients:** before searching, the page lists the 10
+  patients this provider most recently **opened, added or edited** in the
+  last 30 days, newest first. It covers the common "the patient I saw this
+  morning" and "check the patients I just imported" cases without a search.
+  - **Only the provider's own activity**, so it never shows patients they
+    haven't already worked with.
+  - Built from the audit log, which already records exactly this, so
+    nothing new is stored.
+  - Showing it is logged like a search, with the patients listed.
+  - Searches and worklists don't count as "opened": appearing in results
+    isn't working with a patient, and it would fill the list with whoever
+    matched the last search.
 - **Status filter:** works on its own or narrows a search. On its own it
   is a **worklist**, such as everyone on the waitlist or on hold, which
   providers need to work through without knowing names. It's still not a
@@ -155,9 +167,9 @@ retention laws). A permanent delete also can't be undone after a misclick.
     can list everyone.
   - **2 characters** so a single letter can't match almost everyone, while
     short names ("Li", "Ng") still work.
-  - **Trade-off:** providers can no longer browse their patient list or see
-    recent activity at a glance. A "my recent patients" list (from the audit
-    log's reads) is on the Later list as the convenient middle ground.
+  - **Trade-off:** providers can no longer browse their patient list. Two
+    narrower lists cover the everyday needs instead: status worklists (below)
+    and their own recent patients.
   - This replaces an earlier choice of a browsable table, made because small
     practices (e.g. SimplePractice) usually show one.
 - **Table columns:** Name · Date of birth (with age) · Status · City, State ·
@@ -360,8 +372,6 @@ goes on the list below.
   review), plus database-level append-only enforcement, before/after values
   for edits, and a retention policy (commonly 6 years)
 - Warn before closing the form with unsaved changes
-- **My recent patients:** a short list of patients this provider opened
-  recently (from the audit log's `read` entries), next to search
 - Column sorting
 - Multiple addresses per patient (home vs mailing) and address history, in a
   separate addresses table

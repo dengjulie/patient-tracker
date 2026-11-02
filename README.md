@@ -104,6 +104,8 @@ patient-tracker/
         ├── LoginPage.jsx    login form
         ├── PatientsPage.jsx patient table, search, status filter, paging
         ├── PatientDrawer.jsx read-only patient view (side drawer)
+        ├── PatientTable.jsx patient table (search results, recent patients)
+        ├── RecentPatients.jsx your recent patients, shown before searching
         ├── PatientForm.jsx  add/edit modal and delete confirmation
         ├── ImportPatients.jsx CSV import: choose file, map columns, review
         ├── csvImport.js     turns CSV rows into patients for the API
