@@ -5,21 +5,25 @@ import PatientTable from './PatientTable.jsx';
 
 // The provider's own recently opened, added or edited patients, shown only
 // when they ask for them (PRODUCT.md §6). `refreshKey` changes after a save,
-// so an edited patient moves to the top.
-export default function RecentPatients({ refreshKey, statuses, onOpen, onHide }) {
+// so an edited patient moves to the top. `onLoaded` gets how many there are,
+// for the count under the page heading.
+export default function RecentPatients({ refreshKey, statuses, onOpen, onHide, onLoaded }) {
   const [result, setResult] = useState({ patients: null, error: '' });
   const { patients, error } = result;
 
   useEffect(() => {
     const controller = new AbortController();
     api('GET', '/patients/_recent', { signal: controller.signal })
-      .then((data) => setResult({ patients: data.patients, error: '' }))
+      .then((data) => {
+        setResult({ patients: data.patients, error: '' });
+        onLoaded(data.patients.length);
+      })
       .catch((err) => {
         if (err.name === 'AbortError' || err.status === 401) return;
         setResult({ patients: null, error: "Couldn't load your recent patients." });
       });
     return () => controller.abort();
-  }, [refreshKey]);
+  }, [refreshKey, onLoaded]); // onLoaded is a state setter, so it never changes
 
   return (
     <Stack gap="xs">

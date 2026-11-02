@@ -34,6 +34,9 @@ export default function PatientsPage({ user, onLogout }) {
   // Recent patients appear only when the provider asks (PRODUCT.md §6), and
   // hide again when they search or pick a status.
   const [showRecent, setShowRecent] = useState(false);
+  // How many recent patients are shown, for the count under the heading;
+  // null until they've loaded.
+  const [recentCount, setRecentCount] = useState(null);
   // Wait until typing pauses before searching, so we don't send (and audit-log)
   // a request on every keystroke.
   const [debouncedSearch] = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
@@ -147,10 +150,18 @@ export default function PatientsPage({ user, onLogout }) {
             <Title order={1} size="h2">
               Patients
             </Title>
-            {patients && (
+            {patients ? (
               <Text c="dimmed" size="sm">
                 {total} {total === 1 ? 'patient' : 'patients'} found
               </Text>
+            ) : (
+              !askedFor &&
+              showRecent &&
+              recentCount !== null && (
+                <Text c="dimmed" size="sm">
+                  {recentCount} recent {recentCount === 1 ? 'patient' : 'patients'}
+                </Text>
+              )
             )}
           </div>
           <Group gap="sm">
@@ -233,7 +244,14 @@ export default function PatientsPage({ user, onLogout }) {
                     : 'Search by name or date of birth, or choose a status, to find patients.'}
                 </Text>
                 {!showRecent && (
-                  <Button variant="light" size="xs" onClick={() => setShowRecent(true)}>
+                  <Button
+                    variant="light"
+                    size="xs"
+                    onClick={() => {
+                      setRecentCount(null); // not the count from last time
+                      setShowRecent(true);
+                    }}
+                  >
                     Show my recent patients
                   </Button>
                 )}
@@ -241,6 +259,7 @@ export default function PatientsPage({ user, onLogout }) {
             </Paper>
             {showRecent && (
               <RecentPatients
+                onLoaded={setRecentCount}
                 refreshKey={refreshCount}
                 statuses={statuses}
                 onOpen={setViewingId}

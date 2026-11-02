@@ -161,6 +161,8 @@ retention laws). A permanent delete also can't be undone after a misclick.
     edited in the last 30 days, most recent first"), since a patient
     updated last week by someone else isn't in the list until this
     provider has opened them.
+  - **A count under the page heading** ("10 recent patients"), in the same
+    place a search shows "27 patients found".
   - **No Updated column here.** It showed when anyone last changed the
     record, which didn't follow the list's order and read like a broken
     sort. Search results and worklists keep it: they *are* sorted by it.
