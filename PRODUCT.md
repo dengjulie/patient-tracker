@@ -150,14 +150,18 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
 - **Your recent patients:** a **Show my recent patients** button lists the
   10 patients this provider most recently **opened, added or edited** in
-  the last 30 days, sorted like the Updated column so the table's order is
-  visible in it. Which 10 is decided by the provider's activity, so a
-  patient they just opened always appears.
+  the last 30 days, **the most recent first**, so the patient they just
+  looked at is at the top. Opening, adding and editing all count as
+  "viewing", since each shows the record.
+  - We briefly sorted by the Updated column instead. That ordered the list
+    by other people's edits, and a patient the provider had just opened
+    could sit far down (or, before a fix, drop out of the list).
   - **The 30 days are the provider's own activity, not the Updated date.**
     The text under the heading says so ("Patients you've opened, added or
-    edited in the last 30 days. Sorted by when the record was last
-    updated."), since a patient updated last week by someone else isn't in
-    the list until this provider has opened them.
+    edited in the last 30 days, most recent first"), since a patient
+    updated last week by someone else isn't in the list until this
+    provider has opened them. The Updated column still shows when the
+    record itself last changed, which doesn't follow the list's order.
   - **Only on request:** like search, nothing is shown until the provider
     asks. The list hides again when they search, choose a status or click
     Hide, so each time it appears is a deliberate, audited request. It covers the common "the patient I saw this
