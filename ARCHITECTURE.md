@@ -1,4 +1,4 @@
-# Patient Tracker: Architecture
+# Patient Roster: Architecture
 
 How the product decisions in [PRODUCT.md](PRODUCT.md) are built.
 The guiding rule is **the simplest thing that's correct**: well-known

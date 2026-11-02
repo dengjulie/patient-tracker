@@ -1,4 +1,4 @@
-# Patient Tracker
+# Patient Roster
 
 A web app for healthcare providers to record and view patients' critical data:
 name, date of birth, status, and address. Patient data follows the

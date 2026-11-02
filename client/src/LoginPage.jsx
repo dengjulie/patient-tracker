@@ -27,7 +27,7 @@ export default function LoginPage({ notice, onLogin }) {
         <form onSubmit={handleSubmit}>
           <Stack>
             <div>
-              <Title order={2}>Patient Tracker</Title>
+              <Title order={2}>Patient Roster</Title>
               <Text c="dimmed" size="sm">
                 Log in with your provider account.
               </Text>
