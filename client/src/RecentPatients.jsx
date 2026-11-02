@@ -23,10 +23,15 @@ export default function RecentPatients({ refreshKey, statuses, onOpen, onHide })
 
   return (
     <Stack gap="xs">
-      <Group justify="space-between">
-        <Title order={2} size="h4">
-          Your recent patients
-        </Title>
+      <Group justify="space-between" align="flex-start">
+        <div>
+          <Title order={2} size="h4">
+            Your recent patients
+          </Title>
+          <Text size="sm" c="dimmed">
+            Patients you opened, added or edited in the last 30 days, most recently updated first.
+          </Text>
+        </div>
         <Button variant="subtle" size="xs" onClick={onHide}>
           Hide
         </Button>
