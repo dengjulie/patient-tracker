@@ -225,6 +225,22 @@ export default function PatientsPage({ user, onLogout }) {
             }}
             clearable
           />
+          {/* Clears any search or status, so the list shows right away. Stays
+              in place (disabled) while the list is showing, so the row
+              doesn't shift. */}
+          <Button
+            variant="default"
+            style={{ flexGrow: 0 }}
+            disabled={showRecent && !askedFor}
+            onClick={() => {
+              setSearch('');
+              setStatus(null);
+              setRecentCount(null); // not the count from last time
+              setShowRecent(true);
+            }}
+          >
+            Show my recent patients
+          </Button>
         </Group>
 
         {[referenceError, error].filter(Boolean).map((message) => (
@@ -236,25 +252,11 @@ export default function PatientsPage({ user, onLogout }) {
         {!askedFor ? (
           <>
             <Paper withBorder p="xl" radius="md">
-              <Stack align="center" gap="sm">
-                <Text ta="center" c="dimmed">
-                  {search.trim()
-                    ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
-                    : 'Search by name or date of birth, or choose a status, to find patients.'}
-                </Text>
-                {!showRecent && (
-                  <Button
-                    variant="light"
-                    size="xs"
-                    onClick={() => {
-                      setRecentCount(null); // not the count from last time
-                      setShowRecent(true);
-                    }}
-                  >
-                    Show my recent patients
-                  </Button>
-                )}
-              </Stack>
+              <Text ta="center" c="dimmed">
+                {search.trim()
+                  ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
+                  : 'Search by name or date of birth, or choose a status, to find patients.'}
+              </Text>
             </Paper>
             {showRecent && (
               <RecentPatients

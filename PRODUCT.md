@@ -148,7 +148,8 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - Typing "maria garcia" finds *Maria Elena Garcia*, because each word is
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
-- **Your recent patients:** a **Show my recent patients** button lists the
+- **Your recent patients:** a **Show my recent patients** button, next to
+  the search box and status filter, lists the
   10 patients this provider most recently **opened, added or edited** in
   the last 30 days, **the most recent first**, so the patient they just
   looked at is at the top. Opening, adding and editing all count as
