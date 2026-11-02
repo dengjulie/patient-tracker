@@ -1,6 +1,7 @@
 // Integration tests for practice isolation in the database itself: the
-// practice filters in db.js, and Postgres row-level security and role
-// permissions underneath them (ARCHITECTURE.md → Practice isolation).
+// practice filters in db.js, and Postgres row-level security and the app
+// login's permissions underneath them (ARCHITECTURE.md → Practice isolation,
+// Database logins). Queries run as the app's real login, as in production.
 // Several tests send raw SQL with no practice filter on purpose, to show
 // that the database refuses other practices' rows on its own.
 import { test, after } from 'node:test';
@@ -10,7 +11,7 @@ import { useTestDatabase, samplePatient } from './setup.js';
 const { db, drop } = await useTestDatabase();
 after(drop);
 
-const { pool, transaction, withPractice, findOrCreatePractice, createPatient, listPatients, findPatient, updatePatient, markEnteredInError } = db;
+const { pool, withPractice, assertRestrictedLogin, findOrCreatePractice, createPatient, listPatients, findPatient, updatePatient, markEnteredInError } = db;
 
 const { practice: a } = await findOrCreatePractice('Practice A');
 const { practice: b } = await findOrCreatePractice('Practice B');
@@ -37,11 +38,8 @@ test('row-level security hides other practices even from a query with no practic
   assert.deepEqual(rows, [{ practice_id: a.id }]);
 });
 
-test('with no practice set, the app role sees no patients at all', async () => {
-  const { rows } = await transaction(async (client) => {
-    await client.query('SET LOCAL ROLE patient_tracker_app');
-    return client.query('SELECT count(*)::int AS n FROM patients');
-  });
+test('with no practice set, the app login sees no patients at all', async () => {
+  const { rows } = await pool.query('SELECT count(*)::int AS n FROM patients');
   assert.equal(rows[0].n, 0);
 });
 
@@ -65,14 +63,14 @@ test("a patient can't be moved into another practice", async () => {
   );
 });
 
-test('the app role cannot hard-delete patients', async () => {
+test('the app login cannot hard-delete patients', async () => {
   await assert.rejects(
     withPractice(a.id, (scoped) => scoped.query('DELETE FROM patients WHERE id = $1', [patientA.id])),
     /permission denied for table patients/
   );
 });
 
-test('the app role cannot change or delete audit entries', async () => {
+test('the app login cannot change or delete audit entries', async () => {
   await assert.rejects(
     withPractice(a.id, (scoped) => scoped.query(`UPDATE audit_log SET action = 'login'`)),
     /permission denied for table audit_log/
@@ -83,21 +81,36 @@ test('the app role cannot change or delete audit entries', async () => {
   );
 });
 
-test('the role and practice end with the transaction, so they never leak to the next query', async () => {
+test('the practice ends with the transaction, so it never leaks to the next query', async () => {
   await withPractice(a.id, (scoped) => listPatients(scoped));
   // Run on every pooled connection, so the one just used is among them.
   const clients = await Promise.all(Array.from({ length: pool.totalCount }, () => pool.connect()));
   try {
     for (const client of clients) {
-      const { rows } = await client.query(
-        `SELECT current_user, session_user, current_setting('app.practice_id', true) AS practice`
-      );
-      assert.equal(rows[0].current_user, rows[0].session_user, 'back to the login user, not the app role');
+      const { rows } = await client.query(`SELECT current_setting('app.practice_id', true) AS practice`);
       assert.ok(!rows[0].practice, 'no practice left set');
     }
   } finally {
     clients.forEach((client) => client.release());
   }
+});
+
+test('the app login is not a superuser and does not own the tables', async () => {
+  await assertRestrictedLogin();
+});
+
+test('the app login cannot create accounts or practices', async () => {
+  await assert.rejects(
+    pool.query(`INSERT INTO users (practice_id, email, name, password_hash) VALUES ($1, 'x@test.example', 'X', 'x')`, [a.id]),
+    /permission denied for table users/
+  );
+  await assert.rejects(pool.query(`INSERT INTO practices (name) VALUES ('Rogue')`), /permission denied for table practices/);
+});
+
+test('the app login cannot switch off row-level security or change tables', async () => {
+  await assert.rejects(pool.query('ALTER TABLE patients DISABLE ROW LEVEL SECURITY'), /must be owner/);
+  await assert.rejects(pool.query('DROP TABLE audit_log'), /must be owner/);
+  await assert.rejects(pool.query('CREATE TABLE stash (x int)'), /permission denied/);
 });
 
 test('patient queries refuse to run without a practice', async () => {

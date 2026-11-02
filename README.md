@@ -29,13 +29,14 @@ docker compose up -d
 # 2. Configure the server
 cd server
 cp .env.example .env
-# then set SESSION_SECRET in .env to a random string:
+# then in .env, set SESSION_SECRET (and, outside local development, the app
+# login's password in DATABASE_URL) to random strings:
 #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 # 3. Install, add demo data, and start the API on http://localhost:3001
 npm install
-npm run seed
-npm run dev
+npm run seed   # sets up the database first
+npm run dev    # updates the database, then starts the API
 
 # 4. In a second terminal, start the front end
 cd client
@@ -44,6 +45,12 @@ npm run dev
 ```
 
 Then open **http://localhost:5173**.
+
+The server uses two database logins from `.env`: the **owner**
+(`DATABASE_OWNER_URL`) only sets up the database and runs the admin scripts,
+and the API runs as a **restricted app login** (`DATABASE_URL`), which can't
+delete patients, alter the audit log, or see other practices' patients. See
+[ARCHITECTURE.md → Database logins](ARCHITECTURE.md#database-logins).
 
 **Demo logins** (created by `npm run seed`), one per practice, to see that
 providers only see their own practice's patients:
@@ -75,8 +82,9 @@ All endpoints are listed in [ARCHITECTURE.md → API](ARCHITECTURE.md#api).
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Start the API and restart it on file changes. |
-| `npm start` | Start the API. |
+| `npm run migrate` | Set up or update the database as the owner: tables, the app login and its rights. Safe to run again. |
+| `npm run dev` | Run `migrate`, then start the API and restart it on file changes. |
+| `npm start` | Start the API (run `migrate` first after pulling changes). |
 | `npm run seed` | Create two demo practices with a login each: Demo Practice gets 5 hand-written edge-case patients and 250 generated ones, Second Demo Practice 20 generated ones, with realistic history spread over two years (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
 | `npm run create-user -- <email> "<name>" "<practice>"` | Create a provider account in a practice (created if new) and print a temporary password. There's no sign-up page by design ([PRODUCT.md §7](PRODUCT.md#7-security-and-privacy)). |
 
@@ -114,6 +122,7 @@ patient-tracker/
 ├── docker-compose.yml   local Postgres
 ├── server/              Express API
 │   ├── index.js         starts the API
+│   ├── migrate.js       sets up the database (npm run migrate)
 │   ├── app.js           routes and request validation (Zod)
 │   ├── db.js            schema and every SQL query
 │   ├── import.js        sorts CSV import rows (new, already imported, duplicate, invalid)
@@ -122,7 +131,7 @@ patient-tracker/
 │   ├── constants.js     FHIR status codes and US states
 │   ├── seed.js          demo login + fake patients (edge cases and generated)
 │   ├── create-user.js   admin script to add a provider account to a practice
-│   └── .env.example     config template (DATABASE_URL, SESSION_SECRET)
+│   └── .env.example     config template (two database logins, SESSION_SECRET)
 │   └── test/            unit and integration tests (npm test)
 └── client/              React front end (Vite + Mantine)
     ├── vite.config.js   dev server; proxies /api to Express

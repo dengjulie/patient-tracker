@@ -91,14 +91,15 @@ patient-tracker/
 ├── ARCHITECTURE.md    this file
 ├── docker-compose.yml  local Postgres (host port 5433)
 ├── server/
-│   ├── .env.example    DATABASE_URL, SESSION_SECRET; copy to .env
+│   ├── .env.example    DATABASE_OWNER_URL, DATABASE_URL, SESSION_SECRET; copy to .env
 │   ├── audit.js        builds an audit entry from the request
 │   ├── auth.js         password hashing, sessions, login/logout, requireAuth
 │   ├── constants.js    status list (FHIR) and US state list
 │   ├── create-user.js  admin script: create a provider account in a practice
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── import.js       sorts CSV import rows: ready, already imported, duplicates, invalid
-│   ├── index.js        starts the API (initDb, then listen)
+│   ├── index.js        starts the API (checks its database login, then listens)
+│   ├── migrate.js      sets up the database as the owner (npm run migrate)
 │   ├── app.js          Express routes + Zod validation; exported so tests can use it
 │   ├── seed.js         demo logins + 5 edge-case patients + generated ones (Faker, fixed seed)
 │   └── test/           node:test suites; integration ones use a throwaway database
@@ -173,6 +174,41 @@ switched because three product decisions need what Postgres has built in:
 
 The cost is that reviewers need Docker (`docker compose up -d`) or a local
 Postgres install.
+
+### Database logins
+
+The server never connects as a superuser. There are two logins, from
+`server/.env`:
+
+| Login | Env var | Used by | Can |
+| --- | --- | --- | --- |
+| `postgres` (owner) | `DATABASE_OWNER_URL` | `npm run migrate` (and `npm run dev`, which runs it first), `seed.js`, `create-user.js`, the tests' setup | Everything: owns the tables. |
+| `patient_tracker_app` | `DATABASE_URL` | The running API, for every request | `SELECT, INSERT, UPDATE` on `patients` (own practice only, by row-level security); `SELECT, INSERT` on `audit_log`; `SELECT` on `users`, `practices`; read/write `session`. Nothing else: no `DELETE` on patients, no changing or deleting audit entries, no creating accounts, tables or roles, no switching off row-level security. |
+
+- **Why:** if the server were compromised (a stolen `.env`, an injection bug,
+  a bad dependency), the attacker gets only the app login. They can't read
+  other practices' patients, erase records, rewrite the audit log to hide
+  what they did, or drop tables. This is HIPAA's least privilege (access
+  management, §164.308(a)(4)) and protects the audit trail's integrity
+  (§164.312(c)). Superusers can also run operating-system commands from
+  SQL (`COPY … TO PROGRAM`), which the app login can't.
+- **Row-level security applies to everything the server does,** because
+  the app login neither is a superuser nor owns the tables. It doesn't
+  depend on code remembering to switch roles.
+- **`initDb` (as the owner) creates or updates the app login** from
+  `DATABASE_URL`'s user name and password, then `REVOKE`s all and `GRANT`s
+  exactly the rights above, so the rights in code are the rights in the
+  database. It refuses to run if both URLs use the same login.
+- **The server checks at startup** (`assertRestrictedLogin`) that its login
+  isn't a superuser or the tables' owner, and refuses to start otherwise, so
+  a misconfigured `.env` can't silently switch off row-level security.
+- **Adding a table** means granting the app login access in `initDb`;
+  forgetting fails loudly with "permission denied".
+- **In production:** the server would get only `DATABASE_URL`, with the
+  owner credentials kept for deploys and admin. Owner actions can be logged
+  by Postgres itself (`pgaudit`). Hosted Postgres (AWS RDS, Cloud SQL) works
+  this way already: there's no true superuser.
+- **Still not protected:** anyone holding the owner credentials.
 
 ## Schema
 
@@ -316,8 +352,8 @@ which reads one provider's last 30 days.
 
 ### `session`
 
-Created and managed by **connect-pg-simple** (the session store), not by our
-code. It's listed so the whole database is documented in one place.
+Used by **connect-pg-simple** (the session store). Its standard table is
+created by `initDb`, because the app login can't create tables.
 
 | Column | Type | Notes |
 | --- | --- | --- |
@@ -469,23 +505,21 @@ independent layers enforce it, so a bug in one doesn't leak patients:
    scope from `inPractice(req, …)`, which reads the practice from the
    **session**, set at login from the account. The request never supplies it.
 2. **Postgres row-level security (RLS).** `withPractice` runs `work` in a
-   transaction that first runs `SET LOCAL ROLE patient_tracker_app` and
-   `set_config('app.practice_id', …, true)`. The `own_practice` policy on
-   `patients` lets that role see and write only rows whose `practice_id`
-   matches. Both settings are `LOCAL`, so they end with the transaction and
-   never leak to the next request on the pooled connection.
-   - **Why a separate role:** the app connects as `postgres`, and
-     superusers (and table owners) bypass RLS. `patient_tracker_app` can't
-     log in, isn't a superuser, and only has `SELECT, INSERT, UPDATE` on
-     `patients` and `SELECT, INSERT` on `audit_log`. So the database itself
-     also refuses hard deletes of patients and any edit or deletion of audit
-     entries, from any patient request.
+   transaction that first runs `set_config('app.practice_id', …, true)`.
+   The `own_practice` policy on `patients` lets the app's login see and
+   write only rows whose `practice_id` matches. The setting is local to the
+   transaction, so it never leaks to the next request on the pooled
+   connection.
+   - **It applies because the server's login is restricted:** superusers
+     and table owners bypass RLS, so the server connects as
+     `patient_tracker_app`, which is neither (see
+     [Database logins](#database-logins)). The same login also can't
+     hard-delete patients or change or delete audit entries.
    - **Fails closed:** with no practice set, the policy matches nothing.
-   - Created in `initDb` (`CREATE ROLE` needs a database user allowed to
-     create roles; locally that's `postgres`).
 
-What's still unscoped, on purpose: logging in (it must find the account
-before knowing the practice), the session store, and the admin scripts.
+What's not scoped to a practice, on purpose: logging in (it must find the
+account before knowing the practice), the session store, and the admin
+scripts (which use the owner login).
 
 **Results** for another practice's patient id are `404`, the same as an id
 that doesn't exist, so they don't reveal that the patient exists. Import
@@ -500,7 +534,7 @@ shows each layer is checked on its own.
 - **Through the API:** reading, editing (with and without `If-Match`) and
   deleting the other practice's patient all return `404`. Searches and
   imports never match across practices.
-- **Directly in Postgres, as `patient_tracker_app`:**
+- **Directly in Postgres, as the app's own login:**
   - a query with no `WHERE` clause returns only the current practice;
   - no practice set returns nothing;
   - inserting into or moving a patient to another practice is refused;

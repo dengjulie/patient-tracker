@@ -34,7 +34,8 @@ const DUMMY_HASH = await hashPassword(randomBytes(16).toString('hex'));
 const PgSession = connectPgSimple(session);
 
 export const sessions = session({
-  store: new PgSession({ pool, createTableIfMissing: true }),
+  // The table is created by initDb: the app login can't create tables.
+  store: new PgSession({ pool }),
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,

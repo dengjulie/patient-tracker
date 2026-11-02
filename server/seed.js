@@ -13,7 +13,7 @@ import {
   fakerEN_US, fakerES_MX, fakerVI, fakerPT_BR, fakerFR, fakerPL, fakerTR,
 } from '@faker-js/faker';
 import {
-  pool, initDb, withPractice, listPatients, createPatient, setPatientTimestamps,
+  closePools, initDb, withPractice, listPatients, createPatient, setPatientTimestamps,
   createUser, findUserByEmail, findOrCreatePractice, DEFAULT_PRACTICE,
 } from './db.js';
 import { hashPassword } from './auth.js';
@@ -175,4 +175,4 @@ for (const demo of DEMO_PRACTICES) {
     console.log(`Seeded ${practice.name} with ${patients.length} patients.`);
   });
 }
-await pool.end();
+await closePools();

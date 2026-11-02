@@ -8,7 +8,7 @@
 // It generates a random password and prints it once. Hand it to the provider
 // securely. (Password change is on the Later list.)
 import { randomBytes } from 'node:crypto';
-import { pool, initDb, createUser, findOrCreatePractice } from './db.js';
+import { closePools, initDb, createUser, findOrCreatePractice } from './db.js';
 import { hashPassword } from './auth.js';
 
 const [email, name, practiceName] = process.argv.slice(2);
@@ -29,4 +29,4 @@ try {
   console.error(`An account for ${email} already exists.`);
   process.exitCode = 1;
 }
-await pool.end();
+await closePools();

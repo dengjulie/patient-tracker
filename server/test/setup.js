@@ -1,28 +1,33 @@
 // Shared setup for the integration tests. Each test file gets its own
-// throwaway database on the local Postgres (from .env's DATABASE_URL), so
-// tests never touch development data. It's created before db.js is imported,
-// because db.js connects when it's loaded, and dropped when the file ends.
+// throwaway database on the local Postgres, so tests never touch development
+// data. The owner login (DATABASE_OWNER_URL) creates it and sets it up; the
+// app then uses its own login (DATABASE_URL), as in production. It's created
+// before db.js is imported, because db.js connects when it's loaded, and
+// dropped when the file ends.
 import pg from 'pg';
 
 export const TEST_PASSWORD = 'test-password';
 
 export async function useTestDatabase() {
-  const serverUrl = process.env.DATABASE_URL;
+  const ownerUrl = process.env.DATABASE_OWNER_URL;
   const name = `patient_tracker_test_${process.pid}`;
-  await adminQuery(serverUrl, `DROP DATABASE IF EXISTS ${name}`);
-  await adminQuery(serverUrl, `CREATE DATABASE ${name}`);
+  await adminQuery(ownerUrl, `DROP DATABASE IF EXISTS ${name}`);
+  await adminQuery(ownerUrl, `CREATE DATABASE ${name}`);
 
-  const testUrl = new URL(serverUrl);
-  testUrl.pathname = `/${name}`;
-  process.env.DATABASE_URL = testUrl.href;
+  // Both logins, pointed at the test database.
+  for (const key of ['DATABASE_OWNER_URL', 'DATABASE_URL']) {
+    const url = new URL(process.env[key]);
+    url.pathname = `/${name}`;
+    process.env[key] = url.href;
+  }
   process.env.SESSION_SECRET ??= 'test-session-secret';
 
   const db = await import('../db.js');
   await db.initDb();
 
   async function drop() {
-    await db.pool.end();
-    await adminQuery(serverUrl, `DROP DATABASE ${name} WITH (FORCE)`);
+    await db.closePools();
+    await adminQuery(ownerUrl, `DROP DATABASE ${name} WITH (FORCE)`);
   }
   return { db, drop };
 }

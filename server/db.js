@@ -7,6 +7,13 @@ import { STATUSES, ENTERED_IN_ERROR } from './constants.js';
 const DATE_OID = 1082;
 pg.types.setTypeParser(DATE_OID, (value) => value);
 
+// Two database logins (ARCHITECTURE.md → Database logins):
+// - DATABASE_URL is the app's own login, used for every request. It isn't a
+//   superuser and doesn't own the tables, so row-level security applies to
+//   all of its queries, and it has only the rights the app needs (see
+//   initDb). A stolen server config can't erase records or the audit log.
+// - DATABASE_OWNER_URL owns the tables. It's used only to set up the schema
+//   (npm run migrate) and by the admin scripts (seed, create-user).
 export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 // An idle connection can fail (e.g. Postgres restarts). Without a listener,
@@ -14,28 +21,71 @@ export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 // already drops the broken connection and opens a new one when needed.
 pool.on('error', (err) => console.error('Idle database connection error:', err.message));
 
+// Opened only when first needed, so the running server never connects as
+// the owner.
+let ownerPool;
+function owner() {
+  ownerPool ??= new pg.Pool({ connectionString: process.env.DATABASE_OWNER_URL });
+  return ownerPool;
+}
+
+// The app login's name, plus its name and password quoted for SQL, from
+// DATABASE_URL. It must be a different login from the owner's.
+function appLogin() {
+  const url = new URL(process.env.DATABASE_URL);
+  const name = decodeURIComponent(url.username);
+  if (name === decodeURIComponent(new URL(process.env.DATABASE_OWNER_URL).username)) {
+    throw new Error('DATABASE_URL and DATABASE_OWNER_URL must use different logins (see README → Setup).');
+  }
+  return { name, role: pg.escapeIdentifier(name), password: pg.escapeLiteral(decodeURIComponent(url.password)) };
+}
+
+// Closes both connection pools, so a script can exit.
+export async function closePools() {
+  await pool.end();
+  await ownerPool?.end();
+}
+
+// Refuses to run the API as a login that would bypass row-level security:
+// a superuser, or the owner of the patients table. Called at startup, so a
+// misconfigured DATABASE_URL stops the server instead of silently exposing
+// every practice's patients.
+export async function assertRestrictedLogin() {
+  const { rows } = await pool.query(
+    `SELECT rolsuper, pg_has_role(current_user, (SELECT relowner FROM pg_class WHERE relname = 'patients'), 'MEMBER') AS owns
+     FROM pg_roles WHERE rolname = current_user`
+  );
+  if (rows[0].rolsuper || rows[0].owns) {
+    throw new Error('DATABASE_URL must be the app login, not a superuser or the table owner (see README → Setup).');
+  }
+}
+
 const ALL_STATUS_CODES = [...STATUSES.map((s) => s.code), ENTERED_IN_ERROR];
 
 // Audit actions, after ASTM E2147: "query" is a search that showed patients;
 // "read" is opening one patient's full record.
 export const AUDIT_ACTIONS = ['create', 'read', 'update', 'delete', 'query', 'login', 'login_failed', 'logout'];
 
-// The restricted database role patient queries run as (see withPractice).
-// It can't log in, isn't a superuser, and has no DELETE rights, so Postgres
-// row-level security applies to it and records can't be erased through it.
-const APP_ROLE = 'patient_tracker_app';
-
 // The practice existing data joins when a database from before practices is
 // upgraded (see initDb), and the seed's main demo practice.
 export const DEFAULT_PRACTICE = 'Demo Practice';
 
-// Creates the tables if they don't exist yet. Called once at startup.
+// Sets up the database as the owner: creates the tables if they don't exist,
+// upgrades older ones, and creates the app login with only the rights it
+// needs. Run by `npm run migrate` (and before seeding and tests); safe to
+// run again.
 // - One column per field keeps queries simple; the API speaks the nested,
 //   FHIR-shaped JSON, and toPatient/toRow translate between the two.
 // - name_text is FHIR's HumanName.text: the full display name, kept for search.
 // - unaccent lets a search for "jose" find "José".
 export async function initDb() {
-  await pool.query(`
+  const db = owner();
+  const app = appLogin();
+  const { rowCount } = await db.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [app.name]);
+  // Created, or updated to match .env, from DATABASE_URL's user and password.
+  await db.query(`${rowCount ? 'ALTER' : 'CREATE'} ROLE ${app.role} LOGIN PASSWORD ${app.password}`);
+
+  await db.query(`
     CREATE EXTENSION IF NOT EXISTS unaccent;
 
     -- Each provider and each patient belongs to one practice, and providers
@@ -118,18 +168,30 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS patients_practice_updated_idx
       ON patients (practice_id, updated_at DESC, id DESC);
 
-    -- Row-level security: as APP_ROLE, a query sees and writes only patients
-    -- of the practice set for the transaction (app.practice_id). With no
-    -- practice set, it sees none. This holds even if a query forgets to
-    -- filter by practice. Superusers and the table owner bypass it, which is
-    -- why patient queries switch to APP_ROLE.
-    DO $$ BEGIN
-      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${APP_ROLE}') THEN
-        CREATE ROLE ${APP_ROLE} NOLOGIN;
-      END IF;
-    END $$;
-    GRANT SELECT, INSERT, UPDATE ON patients TO ${APP_ROLE};
-    GRANT SELECT, INSERT ON audit_log TO ${APP_ROLE};
+    -- Sessions (connect-pg-simple's table, created here because the app
+    -- login can't create tables).
+    CREATE TABLE IF NOT EXISTS session (
+      sid    VARCHAR NOT NULL PRIMARY KEY,
+      sess   JSON NOT NULL,
+      expire TIMESTAMP(6) NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON session (expire);
+
+    -- The app login's rights: only what the app does. No DELETE on patients
+    -- (records are never erased) and only adding and reading the audit log
+    -- (it's append-only), so a compromised server can't do either. Users and
+    -- practices are read-only: accounts come from the admin scripts.
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM ${app.role};
+    GRANT SELECT, INSERT, UPDATE ON patients TO ${app.role};
+    GRANT SELECT, INSERT ON audit_log TO ${app.role};
+    GRANT SELECT ON users, practices TO ${app.role};
+    GRANT SELECT, INSERT, UPDATE, DELETE ON session TO ${app.role};
+
+    -- Row-level security: the app login sees and writes only patients of the
+    -- practice set for the transaction (app.practice_id; see withPractice).
+    -- With no practice set, it sees none. This holds even if a query forgets
+    -- to filter by practice. The owner and superusers bypass it, which is why
+    -- the app has its own login.
     ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
     DROP POLICY IF EXISTS own_practice ON patients;
     -- NULLIF: after a transaction ends the setting reads as '' (not NULL),
@@ -164,16 +226,15 @@ export async function transaction(work) {
   }
 }
 
-// Runs `work` in a transaction scoped to one practice: as APP_ROLE, with
-// app.practice_id set, so row-level security limits every patient query to
-// that practice. `work` gets a `db` whose `practiceId` the queries below also
+// Runs `work` in a transaction scoped to one practice: app.practice_id is set
+// for the transaction only, so row-level security limits every patient query
+// to that practice. `work` gets a `db` whose `practiceId` the queries below also
 // filter on explicitly; either check alone keeps other practices' patients
 // out. Every patient query goes through here (the functions below take this
 // `db` and have no default), so none can run unscoped by accident.
 export async function withPractice(practiceId, work) {
   if (!Number.isInteger(practiceId)) throw new Error('withPractice needs a practice id');
   return transaction(async (client) => {
-    await client.query(`SET LOCAL ROLE ${APP_ROLE}`);
     await client.query(`SELECT set_config('app.practice_id', $1, true)`, [String(practiceId)]);
     return work({ query: (text, params) => client.query(text, params), practiceId });
   });
@@ -192,20 +253,21 @@ export async function recordAudit(
 }
 
 // The practice with this name, created if it doesn't exist yet, plus
-// whether it was just created. For the seed and create-user scripts; there's
-// no practice sign-up.
+// whether it was just created. For the seed and create-user scripts (as the
+// owner: the app login can't create practices); there's no practice sign-up.
 export async function findOrCreatePractice(name) {
-  const inserted = await pool.query(
+  const inserted = await owner().query(
     `INSERT INTO practices (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *`,
     [name]
   );
   if (inserted.rows[0]) return { practice: inserted.rows[0], created: true };
-  const { rows } = await pool.query(`SELECT * FROM practices WHERE name = $1`, [name]);
+  const { rows } = await owner().query(`SELECT * FROM practices WHERE name = $1`, [name]);
   return { practice: rows[0], created: false };
 }
 
+// As the owner: the app login can't create accounts (no sign-up).
 export async function createUser({ practiceId, email, name, passwordHash }) {
-  const { rows } = await pool.query(
+  const { rows } = await owner().query(
     `INSERT INTO users (practice_id, email, name, password_hash) VALUES ($1, $2, $3, $4)
      RETURNING id, email, name`,
     [practiceId, email.toLowerCase(), name, passwordHash]
