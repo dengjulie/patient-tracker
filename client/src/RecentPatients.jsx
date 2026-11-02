@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Stack, Text, Title } from '@mantine/core';
+import { Button, Center, Group, Loader, Stack, Text, Title } from '@mantine/core';
 import { api } from './api.js';
 import PatientTable from './PatientTable.jsx';
 
-// The provider's own recently opened, added or edited patients, shown before
-// they search (PRODUCT.md §6). `refreshKey` changes after a save, so an
-// edited patient moves to the top.
-export default function RecentPatients({ refreshKey, statuses, onOpen }) {
+// The provider's own recently opened, added or edited patients, shown only
+// when they ask for them (PRODUCT.md §6). `refreshKey` changes after a save,
+// so an edited patient moves to the top.
+export default function RecentPatients({ refreshKey, statuses, onOpen, onHide }) {
   const [result, setResult] = useState({ patients: null, error: '' });
   const { patients, error } = result;
 
@@ -21,23 +21,31 @@ export default function RecentPatients({ refreshKey, statuses, onOpen }) {
     return () => controller.abort();
   }, [refreshKey]);
 
-  if (error) {
-    return (
-      <Text size="sm" c="dimmed">
-        {error}
-      </Text>
-    );
-  }
-  // Nothing until loaded, and nothing for a provider with no recent patients:
-  // the search prompt above is enough.
-  if (!patients?.length) return null;
-
   return (
     <Stack gap="xs">
-      <Title order={2} size="h4">
-        Your recent patients
-      </Title>
-      <PatientTable patients={patients} statuses={statuses} onOpen={onOpen} />
+      <Group justify="space-between">
+        <Title order={2} size="h4">
+          Your recent patients
+        </Title>
+        <Button variant="subtle" size="xs" onClick={onHide}>
+          Hide
+        </Button>
+      </Group>
+      {error ? (
+        <Text size="sm" c="dimmed">
+          {error}
+        </Text>
+      ) : !patients ? (
+        <Center py="md">
+          <Loader size="sm" />
+        </Center>
+      ) : patients.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          No patients opened, added or edited in the last 30 days.
+        </Text>
+      ) : (
+        <PatientTable patients={patients} statuses={statuses} onOpen={onOpen} />
+      )}
     </Stack>
   );
 }

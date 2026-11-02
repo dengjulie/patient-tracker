@@ -487,9 +487,10 @@ The design comes from PRODUCT.md §7. In code:
     answers, so "loading" is derived: the newest result is for an older
     query. The previous rows stay visible meanwhile.
 - **Recent patients** (`RecentPatients.jsx`): shown under the search prompt
-  while there's no search or status. It fetches on mount and again after a
-  save (the list's refresh counter), and shows nothing while loading or if
-  empty, so the page doesn't flicker. It uses the same `PatientTable` as the
+  only after the provider clicks **Show my recent patients**; typing a
+  search, choosing a status or clicking Hide hides it again (a `showRecent`
+  flag, cleared in those handlers rather than an effect). It fetches when
+  shown and again after a save (the list's refresh counter). It uses the same `PatientTable` as the
   search results.
 - **Patient view** (`PatientDrawer.jsx`): a Mantine `Drawer`.
   - **Fetched, not reused:** the list already holds each patient, but the

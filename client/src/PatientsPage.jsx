@@ -31,6 +31,9 @@ export default function PatientsPage({ user, onLogout }) {
   const [refreshCount, setRefreshCount] = useState(0);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(null);
+  // Recent patients appear only when the provider asks (PRODUCT.md §6), and
+  // hide again when they search or pick a status.
+  const [showRecent, setShowRecent] = useState(false);
   // Wait until typing pauses before searching, so we don't send (and audit-log)
   // a request on every keystroke.
   const [debouncedSearch] = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
@@ -194,7 +197,10 @@ export default function PatientsPage({ user, onLogout }) {
             label="Search"
             placeholder="Name or date of birth (MM/DD/YYYY)"
             value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
+            onChange={(e) => {
+              setSearch(e.currentTarget.value);
+              setShowRecent(false);
+            }}
             autoFocus
             rightSection={loading && patients ? <Loader size="xs" /> : null}
             style={{ flexGrow: 3 }}
@@ -204,7 +210,10 @@ export default function PatientsPage({ user, onLogout }) {
             placeholder="All statuses"
             data={statuses.map((s) => ({ value: s.code, label: s.label }))}
             value={status}
-            onChange={setStatus}
+            onChange={(value) => {
+              setStatus(value);
+              setShowRecent(false);
+            }}
             clearable
           />
         </Group>
@@ -218,13 +227,27 @@ export default function PatientsPage({ user, onLogout }) {
         {!askedFor ? (
           <>
             <Paper withBorder p="xl" radius="md">
-              <Text ta="center" c="dimmed">
-                {search.trim()
-                  ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
-                  : 'Search by name or date of birth, or choose a status, to find patients.'}
-              </Text>
+              <Stack align="center" gap="sm">
+                <Text ta="center" c="dimmed">
+                  {search.trim()
+                    ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
+                    : 'Search by name or date of birth, or choose a status, to find patients.'}
+                </Text>
+                {!showRecent && (
+                  <Button variant="light" size="xs" onClick={() => setShowRecent(true)}>
+                    Show my recent patients
+                  </Button>
+                )}
+              </Stack>
             </Paper>
-            <RecentPatients refreshKey={refreshCount} statuses={statuses} onOpen={setViewingId} />
+            {showRecent && (
+              <RecentPatients
+                refreshKey={refreshCount}
+                statuses={statuses}
+                onOpen={setViewingId}
+                onHide={() => setShowRecent(false)}
+              />
+            )}
           </>
         ) : patients === null && !error ? (
           <Center py="xl">

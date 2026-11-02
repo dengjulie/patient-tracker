@@ -134,9 +134,12 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - Typing "maria garcia" finds *Maria Elena Garcia*, because each word is
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
-- **Your recent patients:** before searching, the page lists the 10
-  patients this provider most recently **opened, added or edited** in the
-  last 30 days, newest first. It covers the common "the patient I saw this
+- **Your recent patients:** a **Show my recent patients** button lists the
+  10 patients this provider most recently **opened, added or edited** in the
+  last 30 days, newest first.
+  - **Only on request:** like search, nothing is shown until the provider
+    asks. The list hides again when they search, choose a status or click
+    Hide, so each time it appears is a deliberate, audited request. It covers the common "the patient I saw this
   morning" and "check the patients I just imported" cases without a search.
   - **Only the provider's own activity**, so it never shows patients they
     haven't already worked with.
