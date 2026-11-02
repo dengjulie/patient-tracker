@@ -29,7 +29,7 @@ export default function RecentPatients({ refreshKey, statuses, onOpen, onHide })
             Your recent patients
           </Title>
           <Text size="sm" c="dimmed">
-            Patients you opened, added or edited in the last 30 days, most recently updated first.
+            Patients you’ve opened, added or edited in the last 30 days. Sorted by when the record was last updated.
           </Text>
         </div>
         <Button variant="subtle" size="xs" onClick={onHide}>
