@@ -13,7 +13,7 @@ const TIME_COLUMNS = {
 
 // Fixed column widths (layout="fixed"), so columns stay put across searches,
 // worklists and recent patients instead of resizing to each list's longest
-// value. Long names wrap.
+// value. Long names end in "…"; other long values wrap.
 const WIDTHS = { name: '30%', birthDate: '20%', status: '14%', place: '22%', time: '14%' };
 
 export default function PatientTable({ patients, statuses, onOpen, time: timeName = 'updated' }) {
@@ -40,7 +40,19 @@ export default function PatientTable({ patients, statuses, onOpen, time: timeNam
               // click (including Enter/Space) bubbles up to the row's handler.
               <Table.Tr key={patient.id} onClick={() => onOpen(patient.id)} style={{ cursor: 'pointer' }}>
                 <Table.Td>
-                  <Anchor component="button" type="button" fw={500} c="inherit">
+                  {/* One line, left-aligned, cut off with "…" when too long for
+                      the column; the full name shows on hover. */}
+                  <Anchor
+                    component="button"
+                    type="button"
+                    fw={500}
+                    c="inherit"
+                    display="block"
+                    w="100%"
+                    ta="left"
+                    truncate="end"
+                    title={displayName(patient)}
+                  >
                     {displayName(patient)}
                   </Anchor>
                 </Table.Td>
