@@ -286,6 +286,37 @@ export async function findUserByEmail(email) {
   return rows[0];
 }
 
+// Audit log entries, newest first, for reviewing them (audit-log.js). As the
+// owner, so it sees every practice; the app login only reads its own
+// provider's entries. Every filter is optional.
+export async function listAuditEntries({ patientId, email, practice, action, since, limit = 50 } = {}) {
+  const params = [];
+  const conditions = [];
+  const add = (sql, value) => {
+    params.push(value);
+    conditions.push(sql.replace('?', `$${params.length}`));
+  };
+  if (patientId) add('? = ANY (a.patient_ids)', patientId);
+  if (email) add('lower(coalesce(u.email, a.attempted_email)) = lower(?)', email);
+  if (practice) add('p.name ILIKE ?', practice);
+  if (action) add('a.action = ?', action);
+  if (since) add('a.occurred_at >= ?::date', since);
+  params.push(limit);
+
+  const { rows } = await owner().query(
+    `SELECT a.occurred_at, p.name AS practice, coalesce(u.email, a.attempted_email) AS email,
+            a.action, a.patient_ids, a.ip_address
+     FROM audit_log a
+     LEFT JOIN users u ON u.id = a.user_id
+     LEFT JOIN practices p ON p.id = a.practice_id
+     ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
+     ORDER BY a.id DESC
+     LIMIT $${params.length}`,
+    params
+  );
+  return rows;
+}
+
 // Row (flat, snake_case) -> patient (FHIR-shaped JSON).
 function toPatient(row) {
   if (!row) return undefined;

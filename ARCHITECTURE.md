@@ -100,6 +100,7 @@ patient-tracker/
 │   ├── import.js       sorts CSV import rows: ready, already imported, duplicates, invalid
 │   ├── index.js        starts the API (checks its database login, then listens)
 │   ├── migrate.js      sets up the database as the owner (npm run migrate)
+│   ├── audit-log.js    shows the audit log in the terminal (npm run audit)
 │   ├── app.js          Express routes + Zod validation; exported so tests can use it
 │   ├── seed.js         demo logins + 5 edge-case patients + generated ones (Faker, fixed seed)
 │   └── test/           node:test suites; integration ones use a throwaway database
@@ -571,11 +572,19 @@ The design comes from PRODUCT.md §7. In code:
 - **Append-only:** the app has no code that updates or deletes audit rows.
   Enforcing this in the database itself (revoking `UPDATE`/`DELETE`) is on
   the Later list.
-- **Reviewing it:** for now, with SQL. For example, "who has seen patient 42?":
+- **Reviewing it:** `npm run audit` in `server/` (`audit-log.js`) prints the
+  log newest first, with practice and user names instead of ids. Filters
+  combine: `--patient 42` (who saw or changed patient 42), `--user <email>`,
+  `--practice <name>`, `--action <action>`, `--since <YYYY-MM-DD>`,
+  `--limit <n>` (default 50). It reads with the owner login
+  (`listAuditEntries`), so it covers every practice; it's for whoever runs
+  the system, not providers. For anything else, SQL works too:
   ```sql
   SELECT occurred_at, user_id, action FROM audit_log
   WHERE 42 = ANY(patient_ids) ORDER BY occurred_at;
   ```
+  Running the command isn't itself logged: it has no logged-in user. A
+  review screen for practice admins (on the Later list) would log its views.
 
 ## Front end
 
