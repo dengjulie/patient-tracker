@@ -618,6 +618,12 @@ The design comes from PRODUCT.md §7. In code:
   - **No separate loading flag:** each result is stored with the query it
     answers, so "loading" is derived: the newest result is for an older
     query. The previous rows stay visible meanwhile.
+- **No sideways jumps:** `index.html` reserves the scrollbar's space
+  (`scrollbar-gutter: stable`), so the page doesn't shift when a list grows
+  long enough to scroll. Mantine's Drawer and Modal are set (in `main.jsx`)
+  to keep that scrollbar while open instead of hiding it and padding the
+  page, which would otherwise shift it the other way. Scrolling behind them
+  is still locked.
 - **Recent patients** (`RecentPatients.jsx`): shown under the search row
   only after the provider clicks **Show my recent patients**; typing a
   search, choosing a status or clicking Hide hides it again (a `showRecent`

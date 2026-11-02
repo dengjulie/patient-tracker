@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Patient Roster</title>
+    <!-- Always reserve the scrollbar's space, so the page doesn't shift
+         sideways when a list grows long enough to scroll. -->
+    <style>
+      html {
+        scrollbar-gutter: stable;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
