@@ -139,7 +139,7 @@ export default function PatientsPage({ user, onLogout }) {
             <Text size="sm" c="dimmed">
               {user.name}
             </Text>
-            <Button variant="default" size="xs" onClick={onLogout}>
+            <Button variant="default" onClick={onLogout}>
               Log out
             </Button>
             <Button variant="default" onClick={() => setImporting(true)} disabled={!statuses.length}>
