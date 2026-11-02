@@ -162,6 +162,11 @@ export async function initDb() {
     ALTER TABLE patients ALTER COLUMN practice_id SET NOT NULL;
     ALTER TABLE users ALTER COLUMN practice_id SET NOT NULL;
 
+    -- Single names now go in the last-name field (PRODUCT.md §1). Moves the
+    -- ones saved as a first name before; the display name doesn't change.
+    UPDATE patients SET family_name = given_names[1], given_names = '{}'
+      WHERE family_name = '' AND cardinality(given_names) = 1;
+
     -- Matches the list's filter and sort order, so a page can be read
     -- straight from the index instead of sorting the practice's patients.
     DROP INDEX IF EXISTS patients_updated_at_idx;

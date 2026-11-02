@@ -34,14 +34,12 @@ const patientSchema = z.object({
         // (a middle name would come back as the first name).
         .refine((names) => names.slice(0, names.findLastIndex(Boolean) + 1).every(Boolean), 'Enter a first name before any middle names')
         .transform((names) => names.filter(Boolean)),
-      family: optionalText,
+      // Required, as on insurance claims and passports; a patient with only
+      // one name has it recorded here (PRODUCT.md §1). This still meets
+      // US Core, which needs a given or a family name.
+      family: required('Last name'),
       suffix: optionalText,
-    }, 'Name is required')
-    // US Core rule: a name needs at least a given or a family name.
-    .refine((n) => n.given.length > 0 || n.family, {
-      message: 'Enter a given name or a family name',
-      path: ['given'],
-    }),
+    }, 'Last name is required'),
   preferredName: optionalText,
   birthDate: z.iso
     .date('Enter a valid date of birth')

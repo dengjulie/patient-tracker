@@ -190,3 +190,20 @@ test('search requests are checked: page numbers, page sizes and types', async ()
   assert.equal(result.page, 1);
   assert.equal(result.pageSize, 1);
 });
+
+test('a last name is required; the first name is optional, for patients with one name', async () => {
+  const asA = await loginAs('a@test.example');
+  const add = (name) => asA('POST', '/patients', { body: { ...samplePatient(), name } });
+
+  const noLastName = await add({ given: ['Ada'], family: '' });
+  assert.equal(noLastName.status, 400);
+  assert.deepEqual((await noLastName.json()).errors, { 'name.family': 'Last name is required' });
+
+  const singleName = await add({ given: [], family: 'Wulandari' });
+  assert.equal(singleName.status, 201);
+  assert.equal((await singleName.json()).name.text, 'Wulandari');
+
+  const middleWithoutFirst = await add({ given: ['', 'Lee'], family: 'Chen' });
+  assert.equal(middleWithoutFirst.status, 400);
+  assert.deepEqual((await middleWithoutFirst.json()).errors, { 'name.given': 'Enter a first name before any middle names' });
+});

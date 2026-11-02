@@ -9,9 +9,9 @@ export const MAX_IMPORT_ROWS = 5000; // the server's limit
 // common column names for the field (compared lowercase, letters and digits
 // only), used to pre-select the mapping.
 export const IMPORT_FIELDS = [
-  { key: 'first', label: 'First (given) name', required: true, headers: ['first', 'firstname', 'givenname', 'given', 'fname'] },
+  { key: 'first', label: 'First (given) name', headers: ['first', 'firstname', 'givenname', 'given', 'fname'] },
   { key: 'middle', label: 'Middle name(s)', headers: ['middle', 'middlename', 'middlenames', 'mi', 'middleinitial'] },
-  { key: 'family', label: 'Last (family) name', headers: ['last', 'lastname', 'familyname', 'family', 'surname', 'lname'] },
+  { key: 'family', label: 'Last (family) name', required: true, headers: ['last', 'lastname', 'familyname', 'family', 'surname', 'lname'] },
   { key: 'suffix', label: 'Suffix', headers: ['suffix'] },
   { key: 'prefix', label: 'Prefix', headers: ['prefix', 'title'] },
   { key: 'preferredName', label: 'Preferred name', headers: ['preferredname', 'preferred', 'nickname'] },

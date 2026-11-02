@@ -294,7 +294,7 @@ convention); the API converts them to nested, FHIR-shaped JSON.
 | `practice_id` | `INTEGER` | not null, FK → `practices.id` | The practice the patient belongs to. Enforced by row-level security (see [Practice isolation](#practice-isolation)). |
 | `name_prefix` | `TEXT` | not null, default `''` | FHIR `name.prefix` (Dr., Mx.). |
 | `given_names` | `TEXT[]` | not null, default `{}` | FHIR `name.given`: first and middle names, in order. |
-| `family_name` | `TEXT` | not null, default `''` | FHIR `name.family`. Empty for patients with only one name. |
+| `family_name` | `TEXT` | not null, default `''` | FHIR `name.family`. Required by the API; a patient with only one name has it here (PRODUCT.md §1). |
 | `name_suffix` | `TEXT` | not null, default `''` | FHIR `name.suffix` (Jr., III). |
 | `name_text` | `TEXT` | not null | FHIR `name.text`: the full display name, **computed by the server** and stored so search can match it. |
 | `preferred_name` | `TEXT` | not null, default `''` | FHIR name with `use = usual`. |

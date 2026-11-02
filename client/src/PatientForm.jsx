@@ -63,7 +63,7 @@ function toPayload(values) {
 // Server errors are keyed by API path ("address.postalCode"). Most match a
 // form field directly; these point at the field the provider should fix.
 const ERROR_FIELDS = {
-  name: 'name.first',
+  name: 'name.family',
   'name.given': 'name.first',
   address: 'address.street',
   'address.line': 'address.street',
@@ -174,11 +174,12 @@ export default function PatientForm({ patient, reference, submitting, setSubmitt
 
         <Fieldset legend="Name" variant="unstyled">
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput label="First (given) name" withAsterisk data-autofocus {...field('name.first')} />
+            <TextInput label="First (given) name" data-autofocus {...field('name.first')} />
             <TextInput label="Middle name(s)" {...field('name.middle')} />
             <TextInput
               label="Last (family) name"
-              description="Leave blank if the patient has only one name."
+              description="If the patient has only one name, enter it here."
+              withAsterisk
               {...field('name.family')}
             />
             <TextInput label="Suffix" placeholder="Jr., III" {...field('name.suffix')} />

@@ -34,7 +34,7 @@ const jose = await addPatient(practice.id, 2, { given: ['José'], family: 'Muño
 const robert = await addPatient(practice.id, 3, {
   given: ['Robert', 'James'], family: 'Okafor', suffix: 'Jr.', preferredName: 'Bobby', birthDate: '1991-07-28', status: 'planned',
 });
-const wulandari = await addPatient(practice.id, 4, { given: ['Wulandari'], birthDate: '1969-06-06', status: 'waitlist' });
+const wulandari = await addPatient(practice.id, 4, { given: [], family: 'Wulandari', birthDate: '1969-06-06', status: 'waitlist' });
 const priya = await addPatient(practice.id, 5, { prefix: 'Dr.', given: ['Priya'], family: 'Shah', birthDate: '1976-11-02', status: 'onhold' });
 // Two patients updated at the same moment, for the tie-break.
 const anaFirst = await addPatient(practice.id, 6, { given: ['Ana'], family: 'Tie', birthDate: '2000-01-01' });

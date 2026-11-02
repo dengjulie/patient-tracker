@@ -33,13 +33,27 @@ names wrong.
 | Field | FHIR | Required? | Why |
 | --- | --- | --- | --- |
 | Prefix | `prefix` | No | Dr., Mx., Rev. Some patients want to be addressed this way. |
-| Given names | `given` (a list) | One of given / family | First and middle names are both "given" names; there can be any number. |
-| Family name | `family` | One of given / family | |
+| Given names | `given` (a list) | No | First and middle names are both "given" names; there can be any number. |
+| Family name (last name) | `family` | **Yes** | A patient with only one name has it recorded here. |
 | Suffix | `suffix` | No | **Patient safety.** A father and son with the same name and address, told apart only by "Jr.", are a classic cause of mixed-up records. |
 | Preferred name | a name with `use = usual` | No | How the patient wants to be addressed, e.g. "Bobby" for Robert. Matters for trans patients and anyone with a nickname. Shown as *Robert (Bobby) Smith*. |
 
-- **Required:** at least a given name **or** a family name. This is the US
-  Core FHIR rule, and it means people with only one name can be registered.
+- **Required: the last (family) name.** People with only one name are still
+  registered: their name goes in the last-name field, and the form says so
+  ("If the patient has only one name, enter it here").
+  - **Why last, not first:** it's where everyone else records a single name.
+    Insurance claims (the X12 837 format US practices bill with) require the
+    patient's last name and the first name only "when the person has one".
+    Passports (ICAO) record a single name as the surname, with "FNU" (first
+    name unknown) as the US State Department's placeholder. Following that
+    keeps records ready for billing, and puts every single name in the same
+    field, so duplicate checks and exports work the same way.
+  - **Still meets US Core**, which only needs a given or a family name.
+  - We first required "a given or a family name" (US Core's own rule). That
+    let single names land in either field, and the form marked the first
+    name as required when the server didn't. Single-name patients already
+    saved in the first-name field were moved to the last-name field; their
+    displayed name is unchanged.
 - **No middle name without a first name.** A middle name with a blank first
   name is refused ("Enter a first name before any middle names") rather than
   saved, because FHIR's given-name list has no empty slots: the middle name

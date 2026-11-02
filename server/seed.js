@@ -69,7 +69,7 @@ const samples = [
     address: address(['300 Pine St', 'Unit 12'], 'Seattle', 'WA', '98101'),
   },
   {
-    name: { prefix: '', given: ['Wulandari'], family: '', suffix: '' },
+    name: { prefix: '', given: [], family: 'Wulandari', suffix: '' },
     preferredName: '',
     birthDate: '1969-06-06',
     status: 'waitlist',
@@ -112,8 +112,9 @@ function generatePatient() {
   return {
     name: {
       prefix: f.datatype.boolean(0.03) ? 'Dr.' : '',
-      given,
-      family: onlyOneName ? '' : people.lastName(),
+      // A single name goes in the last-name field (PRODUCT.md §1).
+      given: onlyOneName ? [] : given,
+      family: onlyOneName ? given[0] : people.lastName(),
       suffix: f.datatype.boolean(0.03) ? f.helpers.arrayElement(['Jr.', 'Sr.', 'III']) : '',
     },
     preferredName: f.datatype.boolean(0.1) ? fakerEN_US.person.firstName() : '',
