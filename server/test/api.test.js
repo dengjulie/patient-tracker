@@ -168,3 +168,25 @@ test('search-first: no listing without a 2-character search or a status', async 
   assert.equal((await asA('POST', '/patients/_search', { body: { search: 'a' } })).status, 400);
   assert.equal((await asA('POST', '/patients/_search', { body: { search: 'al' } })).status, 200);
 });
+
+test('search requests are checked: page numbers, page sizes and types', async () => {
+  const asA = await loginAs('a@test.example');
+  const search = (body) => asA('POST', '/patients/_search', { body });
+
+  for (const body of [
+    { search: 'alpha', page: 0 },
+    { search: 'alpha', pageSize: 101 },
+    { search: 'alpha', pageSize: 0 },
+    { search: 'alpha', page: 1.5 },
+    { search: 42 },
+    { status: 7 },
+  ]) {
+    assert.equal((await search(body)).status, 400, JSON.stringify(body));
+  }
+
+  const result = await (await search({ search: 'alpha', page: 1, pageSize: 1 })).json();
+  assert.equal(result.patients.length, 1);
+  assert.equal(result.total, 2);
+  assert.equal(result.page, 1);
+  assert.equal(result.pageSize, 1);
+});
