@@ -1,5 +1,5 @@
 import { Anchor, Badge, Paper, Table, Text } from '@mantine/core';
-import { STATUS_COLORS, age, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
+import { STATUS_COLORS, age, cityState, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
 
 // The patient table, for search results and recent patients. Shows only what
 // providers need to pick the right patient: no street address (PRODUCT.md §6).
@@ -67,9 +67,7 @@ export default function PatientTable({ patients, statuses, onOpen, time: timeNam
                     {statusLabel(patient.status)}
                   </Badge>
                 </Table.Td>
-                <Table.Td>
-                  {patient.address.city}, {patient.address.state}
-                </Table.Td>
+                <Table.Td>{cityState(patient.address) || <Text span c="dimmed">—</Text>}</Table.Td>
                 <Table.Td c="dimmed" fz="sm">
                   <time dateTime={patient[time.field]} title={formatTimestamp(patient[time.field])}>
                     {formatUpdated(patient[time.field])}

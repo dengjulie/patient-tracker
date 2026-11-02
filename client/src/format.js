@@ -17,6 +17,12 @@ export function displayName(patient) {
   return preferredName ? `${name.text} (${preferredName})` : name.text;
 }
 
+// "Austin, TX", from whichever parts are filled in: every address part is
+// optional, for patients without a fixed address.
+export function cityState({ city, state }) {
+  return [city, state].filter(Boolean).join(', ');
+}
+
 // '1984-03-12' -> '03/12/1984'
 export function formatDate(isoDate) {
   const [year, month, day] = isoDate.split('-');

@@ -88,7 +88,24 @@ see a birth from earlier today refused until UTC catches up.
     only treat patients located in states where they hold a license. So the
     state is legally meaningful.
   - Insurance and billing are US-specific too.
-- **Fields:** street (required), apt/unit (optional), city, state, ZIP.
+- **Fields:** street, apt/unit, city, state, ZIP. **All optional**, alone or
+  together.
+  - **Why:** patients experiencing homelessness, or anyone without a fixed
+    address, couldn't be registered while the address was required. FHIR and
+    US Core make every part of an address optional.
+  - **Partial addresses are allowed**, e.g. just "Denver, CO", so the state
+    can still be recorded for licensing when there's no street. We considered
+    "all or nothing" (cleaner for billing, but no way to record where a
+    patient without housing is) and "city and state required" (blocks
+    patients whose location isn't known yet).
+  - **What's entered must still be valid:** a real state, a 5-digit ZIP, and
+    no apt/unit without a street ("Enter a street before an apt or unit"),
+    since the unit would otherwise be saved as the street.
+  - The form says so under Street: "If the patient has no fixed address, fill
+    in only what you know, or leave it all blank." A patient with no address
+    shows "—" in the list and "No address on file" when opened.
+  - **Trade-off:** some records will have incomplete addresses that billing
+    would need completed later.
 - **State:** a **dropdown**, not free text. It covers the 50 states, DC, the
   US territories (PR, GU, VI, AS, MP) and military addresses (AA, AE, AP).
   This rules out typos like "ZZ".
@@ -463,9 +480,3 @@ goes on the list below.
 - International addresses and a country field (§3)
 - Gender and sex fields (US Core includes them, but they are out of scope for
   this request)
-
-## Open questions
-
-- **Patients without a fixed address.** Patients experiencing homelessness
-  can't fill in the address fields, and FHIR makes address optional. Right
-  now, address is required. Should it become optional?

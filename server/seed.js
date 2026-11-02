@@ -75,6 +75,14 @@ const samples = [
     status: 'waitlist',
     address: address(['77 Kalakaua Ave'], 'Honolulu', 'HI', '96815'),
   },
+  {
+    // No fixed address: only the city and state are known.
+    name: { prefix: '', given: ['Marcus'], family: 'Webb', suffix: '' },
+    preferredName: '',
+    birthDate: '1958-09-14',
+    status: 'active',
+    address: address([], 'Denver', 'CO', ''),
+  },
 ];
 
 // Names come from several locales so search is exercised on accents and

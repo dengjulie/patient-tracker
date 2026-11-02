@@ -57,7 +57,7 @@ providers only see their own practice's patients:
 
 | Email | Password | Practice |
 | --- | --- | --- |
-| `demo@example.com` | `demo-password` | Demo Practice (255 patients) |
+| `demo@example.com` | `demo-password` | Demo Practice (256 patients) |
 | `second@example.com` | `demo-password` | Second Demo Practice (20 patients) |
 
 ### Trying the API
@@ -85,7 +85,7 @@ All endpoints are listed in [ARCHITECTURE.md → API](ARCHITECTURE.md#api).
 | `npm run migrate` | Set up or update the database as the owner: tables, the app login and its rights. Safe to run again. |
 | `npm run dev` | Run `migrate`, then start the API and restart it on file changes. |
 | `npm start` | Start the API (run `migrate` first after pulling changes). |
-| `npm run seed` | Create two demo practices with a login each: Demo Practice gets 5 hand-written edge-case patients and 250 generated ones, Second Demo Practice 20 generated ones, with realistic history spread over two years (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
+| `npm run seed` | Create two demo practices with a login each: Demo Practice gets 6 hand-written edge-case patients (including one with no fixed address) and 250 generated ones, Second Demo Practice 20 generated ones, with realistic history spread over two years (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
 | `npm run audit-log` | Show the audit log, newest first. Filters combine: `-- --patient 42`, `--user demo@example.com`, `--practice "Demo Practice"`, `--action login_failed`, `--since 2026-11-01`, `--limit 200`. The output is PHI. |
 | `npm run create-user -- <email> "<name>" "<practice>"` | Create a provider account in a practice (created if new) and print a temporary password. There's no sign-up page by design ([PRODUCT.md §7](PRODUCT.md#7-security-and-privacy)). |
 

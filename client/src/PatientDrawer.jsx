@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Center, Drawer, Group, Loader, Stack, Text, Title } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { api } from './api.js';
-import { STATUS_COLORS, age, displayName, formatDate, formatTimestamp } from './format.js';
+import { STATUS_COLORS, age, cityState, displayName, formatDate, formatTimestamp } from './format.js';
 import PatientForm from './PatientForm.jsx';
 
 // The patient side panel (PRODUCT.md §6): one drawer that shows a patient
@@ -94,6 +94,9 @@ export default function PatientDrawer({
 
 function PatientDetails({ patient, statuses, onEdit }) {
   const status = statuses.find((s) => s.code === patient.status);
+  // Any address part may be blank (no fixed address), so show only what's there.
+  const { address } = patient;
+  const addressLines = [...address.line, [cityState(address), address.postalCode].filter(Boolean).join(' ')].filter(Boolean);
   return (
     <Stack gap="lg">
       <div>
@@ -118,12 +121,11 @@ function PatientDetails({ patient, statuses, onEdit }) {
       </Field>
 
       <Field label="Address">
-        {patient.address.line.map((line) => (
-          <div key={line}>{line}</div>
-        ))}
-        <div>
-          {patient.address.city}, {patient.address.state} {patient.address.postalCode}
-        </div>
+        {addressLines.length ? (
+          addressLines.map((line) => <div key={line}>{line}</div>)
+        ) : (
+          <Text c="dimmed">No address on file</Text>
+        )}
       </Field>
 
       <Field label="Record">

@@ -208,6 +208,29 @@ test('a last name is required; the first name is optional, for patients with one
   assert.deepEqual((await middleWithoutFirst.json()).errors, { 'name.given': 'Enter a first name before any middle names' });
 });
 
+test('the address is optional, in whole or in part, but what is entered must be valid', async () => {
+  const asA = await loginAs('a@test.example');
+  const { address: _, ...noAddress } = samplePatient();
+  const add = (address) => asA('POST', '/patients', { body: { ...noAddress, address } });
+  const empty = { line: [], city: '', state: '', postalCode: '' };
+
+  const none = await asA('POST', '/patients', { body: noAddress });
+  assert.equal(none.status, 201);
+  assert.deepEqual((await none.json()).address, empty);
+
+  const cityAndState = await add({ line: ['', ''], city: 'Denver', state: 'CO', postalCode: '' });
+  assert.equal(cityAndState.status, 201);
+  assert.deepEqual((await cityAndState.json()).address, { ...empty, city: 'Denver', state: 'CO' });
+
+  const invalid = await add({ line: ['', 'Apt 4'], city: '', state: 'ZZ', postalCode: '123' });
+  assert.equal(invalid.status, 400);
+  assert.deepEqual((await invalid.json()).errors, {
+    'address.line': 'Enter a street before an apt or unit',
+    'address.state': 'Choose a state',
+    'address.postalCode': 'Use a 5-digit ZIP (or ZIP+4)',
+  });
+});
+
 test('the patient just opened is first in recent patients, even if others were updated later', async () => {
   const asA = await loginAs('a@test.example');
   // Eleven new patients: all updated after alpha, and all "added" by A.

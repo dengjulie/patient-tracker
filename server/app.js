@@ -46,19 +46,23 @@ const patientSchema = z.object({
     .refine((d) => d <= today(), 'Date of birth cannot be in the future'),
   // Patients can't be set to entered-in-error here; only DELETE does that.
   status: z.enum(STATUSES.map((s) => s.code), 'Choose a status'),
-  address: z.object(
-    {
+  // Every part is optional, so a patient without a fixed address can be
+  // recorded with what's known, e.g. just a city and state (PRODUCT.md §3).
+  // What is entered must still be valid.
+  address: z
+    .object({
       line: z
         .array(z.string().trim())
         .max(2)
-        .refine((lines) => lines[0], 'Street address is required')
+        .default([])
+        // A unit with no street would be saved as the street.
+        .refine((lines) => lines[0] || !lines[1], 'Enter a street before an apt or unit')
         .transform((lines) => lines.filter(Boolean)),
-      city: required('City'),
-      state: z.enum(US_STATES.map((s) => s.code), 'Choose a state'),
-      postalCode: z.string('ZIP is required').trim().regex(/^\d{5}(-\d{4})?$/, 'Use a 5-digit ZIP (or ZIP+4)'),
-    },
-    'Address is required'
-  ),
+      city: optionalText,
+      state: z.enum(['', ...US_STATES.map((s) => s.code)], 'Choose a state').default(''),
+      postalCode: optionalText.pipe(z.string().regex(/^(\d{5}(-\d{4})?)?$/, 'Use a 5-digit ZIP (or ZIP+4)')),
+    })
+    .default({ line: [], city: '', state: '', postalCode: '' }),
 });
 
 // Returns { data } for a valid patient, or { errors: { "address.city": message } }.

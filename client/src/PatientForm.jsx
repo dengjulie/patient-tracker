@@ -31,7 +31,7 @@ function toFormValues(patient) {
       street: address.line[0] ?? '',
       unit: address.line[1] ?? '',
       city: address.city,
-      state: address.state,
+      state: address.state || null, // the Select's "nothing chosen"
       postalCode: address.postalCode,
     },
   };
@@ -240,19 +240,23 @@ export default function PatientForm({ patient, reference, submitting, setSubmitt
 
         <Fieldset legend={<SectionTitle icon={IconHome}>Address</SectionTitle>} variant="unstyled" styles={SECTION_STYLES}>
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput label="Street" withAsterisk {...field('address.street')} />
+            <TextInput
+              label="Street"
+              description="If the patient has no fixed address, fill in only what you know, or leave it all blank."
+              {...field('address.street')}
+            />
             <TextInput label="Apt / unit" {...field('address.unit')} />
-            <TextInput label="City" withAsterisk {...field('address.city')} />
+            <TextInput label="City" {...field('address.city')} />
             <SimpleGrid cols={2}>
               <Select
                 label="State"
-                withAsterisk
                 searchable
+                clearable
                 nothingFoundMessage="No matching state"
                 data={reference.states.map((s) => ({ value: s.code, label: `${s.code} — ${s.name}` }))}
                 {...field('address.state')}
               />
-              <TextInput label="ZIP" withAsterisk inputMode="numeric" {...field('address.postalCode')} />
+              <TextInput label="ZIP" inputMode="numeric" {...field('address.postalCode')} />
             </SimpleGrid>
           </SimpleGrid>
         </Fieldset>

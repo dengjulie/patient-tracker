@@ -107,11 +107,11 @@ export async function initDb() {
       preferred_name TEXT NOT NULL DEFAULT '',
       birth_date     DATE NOT NULL,
       status         TEXT NOT NULL CHECK (status IN (${ALL_STATUS_CODES.map((s) => `'${s}'`).join(', ')})),
-      address_line1  TEXT NOT NULL,
+      address_line1  TEXT NOT NULL DEFAULT '',
       address_line2  TEXT NOT NULL DEFAULT '',
-      city           TEXT NOT NULL,
-      state          TEXT NOT NULL,
-      postal_code    TEXT NOT NULL,
+      city           TEXT NOT NULL DEFAULT '',
+      state          TEXT NOT NULL DEFAULT '',
+      postal_code    TEXT NOT NULL DEFAULT '',
       created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
     );
@@ -166,6 +166,14 @@ export async function initDb() {
     -- ones saved as a first name before; the display name doesn't change.
     UPDATE patients SET family_name = given_names[1], given_names = '{}'
       WHERE family_name = '' AND cardinality(given_names) = 1;
+
+    -- The address became optional (PRODUCT.md §3): gives databases created
+    -- before then the same defaults as a new one.
+    ALTER TABLE patients
+      ALTER COLUMN address_line1 SET DEFAULT '',
+      ALTER COLUMN city SET DEFAULT '',
+      ALTER COLUMN state SET DEFAULT '',
+      ALTER COLUMN postal_code SET DEFAULT '';
 
     -- Matches the list's filter and sort order, so a page can be read
     -- straight from the index instead of sorting the practice's patients.
@@ -361,7 +369,7 @@ function toRow({ name, preferredName, birthDate, status, address }) {
     preferredName,
     birthDate,
     status,
-    address.line[0],
+    address.line[0] ?? '',
     address.line[1] ?? '',
     address.city,
     address.state,

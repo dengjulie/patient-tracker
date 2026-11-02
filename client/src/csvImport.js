@@ -17,11 +17,11 @@ export const IMPORT_FIELDS = [
   { key: 'preferredName', label: 'Preferred name', headers: ['preferredname', 'preferred', 'nickname'] },
   { key: 'birthDate', label: 'Date of birth', required: true, headers: ['dob', 'dateofbirth', 'birthdate', 'birthday'] },
   { key: 'status', label: 'Status', required: true, headers: ['status'] },
-  { key: 'street', label: 'Street', required: true, headers: ['street', 'address', 'address1', 'addressline1', 'streetaddress'] },
+  { key: 'street', label: 'Street', headers: ['street', 'address', 'address1', 'addressline1', 'streetaddress'] },
   { key: 'unit', label: 'Apt / unit', headers: ['unit', 'apt', 'apartment', 'suite', 'address2', 'addressline2'] },
-  { key: 'city', label: 'City', required: true, headers: ['city'] },
-  { key: 'state', label: 'State', required: true, headers: ['state', 'st'] },
-  { key: 'postalCode', label: 'ZIP', required: true, headers: ['zip', 'zipcode', 'postalcode', 'postcode'] },
+  { key: 'city', label: 'City', headers: ['city'] },
+  { key: 'state', label: 'State', headers: ['state', 'st'] },
+  { key: 'postalCode', label: 'ZIP', headers: ['zip', 'zipcode', 'postalcode', 'postcode'] },
 ];
 
 const simplify = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, '');

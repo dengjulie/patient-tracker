@@ -103,7 +103,7 @@ patient-tracker/
 │   ├── migrate.js      sets up the database as the owner (npm run migrate)
 │   ├── audit-log.js    shows the audit log in the terminal (npm run audit-log)
 │   ├── app.js          Express routes + Zod validation; exported so tests can use it
-│   ├── seed.js         demo logins + 5 edge-case patients + generated ones (Faker, fixed seed)
+│   ├── seed.js         demo logins + 6 edge-case patients + generated ones (Faker, fixed seed)
 │   └── test/           node:test suites; integration ones use a throwaway database
 └── client/             React front end
     ├── vite.config.js  proxies /api to Express (one origin, so cookies just work)
@@ -139,6 +139,7 @@ parameters. That is a lot of machinery we don't need.
 | `HumanName.prefix[]` / `suffix[]` (lists) | single strings | Patients rarely have more than one. |
 | `EpisodeOfCare.status` (its own resource) | `status` directly on the patient | One episode per patient for now. |
 | `Address.country`, `use`, `period` | omitted | US only (PRODUCT.md §3). |
+| Unknown address parts left out | `address` always present; unknown parts are `""` (or `line: []`) | Every patient has the same shape, as with the name parts. A patient with no address has every part blank. |
 
 Example patient:
 
@@ -302,11 +303,11 @@ convention); the API converts them to nested, FHIR-shaped JSON.
 | `preferred_name` | `TEXT` | not null, default `''` | FHIR name with `use = usual`. |
 | `birth_date` | `DATE` | not null | Returned as `YYYY-MM-DD` text (see Conventions). |
 | `status` | `TEXT` | not null, `CHECK` in FHIR codes | `planned`, `waitlist`, `active`, `onhold`, `finished`, `cancelled`, `entered-in-error`. |
-| `address_line1` | `TEXT` | not null | Street. |
+| `address_line1` | `TEXT` | not null, default `''` | Street. Every address column is optional and blank when unknown (PRODUCT.md §3). |
 | `address_line2` | `TEXT` | not null, default `''` | Apt / unit. |
-| `city` | `TEXT` | not null | |
-| `state` | `TEXT` | not null | 2-letter code; the API checks it against the 59 US codes. |
-| `postal_code` | `TEXT` | not null | Text, so leading zeros survive (`02110`). |
+| `city` | `TEXT` | not null, default `''` | |
+| `state` | `TEXT` | not null, default `''` | 2-letter code; the API checks it against the 59 US codes. |
+| `postal_code` | `TEXT` | not null, default `''` | Text, so leading zeros survive (`02110`). |
 | `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` | `updated_at` is set on every edit and drives the list's sort order (index `patients_practice_updated_idx` on `practice_id, updated_at DESC, id DESC`). |
 
 - **Status check in the database:** the API validates the status, and the
