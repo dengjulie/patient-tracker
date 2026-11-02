@@ -3,8 +3,9 @@ import { Alert, Anchor, Badge, Button, Center, Container, Group, Loader, Paginat
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { api } from './api.js';
-import { age, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
+import { STATUS_COLORS, age, displayName, formatDate, formatTimestamp, formatUpdated } from './format.js';
 import PatientForm from './PatientForm.jsx';
+import PatientDrawer from './PatientDrawer.jsx';
 import ImportPatients from './ImportPatients.jsx';
 
 const SEARCH_DELAY_MS = 300;
@@ -13,21 +14,13 @@ const PAGE_SIZE = 25;
 // Screen-reader names for the pagination arrows.
 const PAGINATION_LABELS = { first: 'First page', previous: 'Previous page', next: 'Next page', last: 'Last page' };
 
-const STATUS_COLORS = {
-  planned: 'blue',
-  waitlist: 'yellow',
-  active: 'green',
-  onhold: 'orange',
-  finished: 'gray',
-  cancelled: 'red',
-};
-
 export default function PatientsPage({ user, onLogout }) {
   const [reference, setReference] = useState({ statuses: [], states: [] });
   const { statuses } = reference;
   const [referenceError, setReferenceError] = useState('');
   // undefined = form closed, null = adding a patient, object = editing that patient
   const [editing, setEditing] = useState(undefined);
+  const [viewingId, setViewingId] = useState(null); // the patient open in the view, if any
   const [importing, setImporting] = useState(false);
   // Bumped after a save or delete to reload the list, even if the query is unchanged.
   const [refreshCount, setRefreshCount] = useState(0);
@@ -107,6 +100,7 @@ export default function PatientsPage({ user, onLogout }) {
 
   function handleDeleted(patient) {
     setEditing(undefined);
+    setViewingId(null);
     notifications.show({ title: 'Patient deleted', message: `${displayName(patient)} was marked as entered in error.` });
     reload();
   }
@@ -169,6 +163,19 @@ export default function PatientsPage({ user, onLogout }) {
           />
         )}
 
+        {/* Hidden while the edit form is open, so Escape closes only the form;
+            it slides back afterwards. Reloads with the list after a save. */}
+        {viewingId !== null && (
+          <PatientDrawer
+            opened={editing === undefined}
+            patientId={viewingId}
+            refreshKey={refreshCount}
+            statuses={statuses}
+            onEdit={setEditing}
+            onClose={() => setViewingId(null)}
+          />
+        )}
+
         {importing && (
           <ImportPatients reference={reference} onClose={() => setImporting(false)} onImported={handleImported} />
         )}
@@ -227,7 +234,7 @@ export default function PatientsPage({ user, onLogout }) {
                       // The whole row opens the patient for mouse users; the name is a
                       // real button so keyboard and screen-reader users can too. Its
                       // click (including Enter/Space) bubbles up to the row's handler.
-                      <Table.Tr key={patient.id} onClick={() => setEditing(patient)} style={{ cursor: 'pointer' }}>
+                      <Table.Tr key={patient.id} onClick={() => setViewingId(patient.id)} style={{ cursor: 'pointer' }}>
                         <Table.Td>
                           <Anchor component="button" type="button" fw={500} c="inherit">
                             {displayName(patient)}

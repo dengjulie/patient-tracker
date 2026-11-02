@@ -148,15 +148,28 @@ retention laws). A permanent delete also can't be undone after a misclick.
   Updated. "Updated" makes the sort order visible: recent changes read as
   relative time ("3 hours ago", "yesterday"), older ones as a date ("Oct 12,
   2026"), with the exact time on hover.
-  The full address is stored, but shown only when you open a patient to edit.
+  The full address is stored, but shown only when you open a patient.
   That limits what's visible over a provider's shoulder (see §7).
+- **Viewing a patient:** clicking a patient (or their name, a real button,
+  so it works from the keyboard) opens a **read-only side drawer** with the
+  full record: name, status and its meaning, date of birth and age, full
+  address, and when the record was added and last updated. The list stays in
+  place behind it, as in HubSpot's or Linear's record previews and many EHR
+  patient lists, so providers can check a patient and get back to where they
+  were. An **Edit** button opens the edit form; the drawer steps aside while
+  it's open and returns, updated, after saving. Seeing a record and changing
+  it are separate, so a look can't turn into an accidental edit.
+  - Not a separate page with its own URL: that would need a router and would
+    put patient ids in browser history and logs, which we avoid for search
+    terms too.
+  - **Opening the drawer is audited** as a "read" (§7).
 - **Paging:** 25 patients per page, with numbered page buttons and
   "Showing 26–50 of 255". Changing the search or the status filter goes back
   to page 1. Paging happens on the server, so the browser never loads the
   whole patient list. That keeps it fast at hospital scale and means only
   the patients actually shown are recorded as viewed in the audit log.
-- **Adding and editing:** an "Add patient" button, or click a patient's name
-  (a real button, so it works from the keyboard).
+- **Adding and editing:** an "Add patient" button, or **Edit** in the
+  patient view.
   - **Name labels:** "First (given) name", "Middle name(s)" and "Last (family)
     name": familiar words, with the FHIR meaning in brackets. Under the last
     name: "Leave blank if the patient has only one name."
@@ -249,6 +262,7 @@ ASTM E2147 standard).
 | --- | --- |
 | Create, edit, or delete (entered-in-error) a patient | Who, when, the action, the patient id |
 | **Search** | Who, when, and the **ids of every patient shown in the results**. A search reveals patients, so it counts as viewing them. |
+| **Open a patient** (read) | Who, when, the patient id. Separate from search: it shows the full record, including the street address the list leaves out, so "who opened this record?" can be answered on its own. |
 | Login success, login failure, logout | Who (or the email attempted), when |
 
 Every entry also records the IP address of the request.

@@ -16,8 +16,9 @@ pool.on('error', (err) => console.error('Idle database connection error:', err.m
 
 const ALL_STATUS_CODES = [...STATUSES.map((s) => s.code), ENTERED_IN_ERROR];
 
-// Audit actions, after ASTM E2147: "query" is a search that showed patients.
-export const AUDIT_ACTIONS = ['create', 'update', 'delete', 'query', 'login', 'login_failed', 'logout'];
+// Audit actions, after ASTM E2147: "query" is a search that showed patients;
+// "read" is opening one patient's full record.
+export const AUDIT_ACTIONS = ['create', 'read', 'update', 'delete', 'query', 'login', 'login_failed', 'logout'];
 
 // Creates the table if it doesn't exist yet. Called once at startup.
 // - One column per field keeps queries simple; the API speaks the nested,
@@ -67,11 +68,16 @@ export async function initDb() {
       id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
       user_id         INTEGER REFERENCES users (id),
-      action          TEXT NOT NULL CHECK (action IN (${AUDIT_ACTIONS.map((a) => `'${a}'`).join(', ')})),
+      action          TEXT NOT NULL,
       patient_ids     INTEGER[] NOT NULL DEFAULT '{}',
       attempted_email TEXT,
       ip_address      TEXT
     );
+    -- Recreated on every start, so a database made before an action was
+    -- added to AUDIT_ACTIONS accepts it too.
+    ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_action_check;
+    ALTER TABLE audit_log ADD CONSTRAINT audit_log_action_check
+      CHECK (action IN (${AUDIT_ACTIONS.map((a) => `'${a}'`).join(', ')}));
   `);
 }
 
@@ -229,6 +235,12 @@ export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
      RETURNING *`,
     [...toRow(patient), id, ifUpdatedAt ?? null]
   );
+  return toPatient(rows[0]);
+}
+
+// One patient, unless it was entered in error (hidden everywhere, like the list).
+export async function findPatient(id, db = pool) {
+  const { rows } = await db.query(`SELECT * FROM patients WHERE id = $1 AND status <> $2`, [id, ENTERED_IN_ERROR]);
   return toPatient(rows[0]);
 }
 

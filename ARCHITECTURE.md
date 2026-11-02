@@ -12,12 +12,14 @@ flowchart TB
         App["App.jsx<br/>login page or patients page"]
         Login["LoginPage.jsx"]
         List["PatientsPage.jsx<br/>table, search, filter, paging"]
+        View["PatientDrawer.jsx<br/>read-only patient view"]
         Form["PatientForm.jsx<br/>add, edit, delete"]
         Import["ImportPatients.jsx<br/>CSV: map columns, review, import"]
         Api["api.js<br/>every API call<br/>15-minute idle clock"]
         App --> Login & List
-        List --> Form & Import
-        Login & List & Form & Import --> Api
+        List --> View & Form & Import
+        View --> Form
+        Login & List & View & Form & Import --> Api
     end
 
     Vite["Vite dev server :5173<br/>proxies /api to :3001"]
@@ -103,6 +105,7 @@ patient-tracker/
         ├── App.jsx           login page vs patients page; session-end messages
         ├── LoginPage.jsx
         ├── PatientsPage.jsx  table, debounced search, status filter, paging
+        ├── PatientDrawer.jsx read-only patient view (side drawer); logs a read
         ├── PatientForm.jsx   add/edit modal, delete confirmation
         ├── ImportPatients.jsx CSV import modal: choose file, map columns, review
         ├── csvImport.js      CSV row -> API patient; column-name guesses; date/ZIP/state fixes
@@ -270,7 +273,7 @@ ids, never names or search terms.
 | `id` | `BIGINT` | PK, identity | `BIGINT` because this table grows fastest. |
 | `occurred_at` | `TIMESTAMPTZ` | not null, default `now()` | |
 | `user_id` | `INTEGER` | FK → `users.id`, nullable | Null only for a failed login with an unknown email. |
-| `action` | `TEXT` | not null, `CHECK` | `create`, `update`, `delete`, `query`, `login`, `login_failed`, `logout`. |
+| `action` | `TEXT` | not null, `CHECK` | `create`, `read`, `update`, `delete`, `query`, `login`, `login_failed`, `logout`. The `CHECK` is recreated from `AUDIT_ACTIONS` on every start, so an existing database accepts newly added actions. |
 | `patient_ids` | `INTEGER[]` | not null, default `{}` | Every patient the action touched or showed. |
 | `attempted_email` | `TEXT` | nullable | Failed logins only. |
 | `ip_address` | `TEXT` | nullable | From the request. |
@@ -318,6 +321,7 @@ code. It's listed so the whole database is documented in one place.
 | DELETE | `/api/session` | Log out. Returns `204`. |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
 | POST | `/api/patients/_search` | One page of patients, excluding entered-in-error. Body (all optional): `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }` (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
+| GET | `/api/patients/:id` | One patient's full record, for the patient view. Logged as a `read` before responding. `404` if unknown or entered in error. |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. Send `If-Match: "<updatedAt>"` (the value the editor loaded) to refuse the save if someone changed the patient since; the form always does. |
 | DELETE | `/api/patients/:id` | Sets status to `entered-in-error` (no row is erased). Returns `204`. |
@@ -425,6 +429,8 @@ The design comes from PRODUCT.md §7. In code:
 - **Imports:** one `create` entry listing every imported patient, in the
   same transaction as the inserts, plus a `query` entry for the patients on
   file that the rows matched.
+- **Opening a patient** writes a `read` entry before the record is sent,
+  failing closed like a search.
 - **Searches fail closed:** the `query` entry, with the ids of every patient
   in the results, is written *before* the response is sent. If it fails, the
   provider gets a 500 and no results.
@@ -461,6 +467,20 @@ The design comes from PRODUCT.md §7. In code:
   - **No separate loading flag:** each result is stored with the query it
     answers, so "loading" is derived: the newest result is for an older
     query. The previous rows stay visible meanwhile.
+- **Patient view** (`PatientDrawer.jsx`): a Mantine `Drawer`.
+  - **Fetched, not reused:** the list already holds each patient, but the
+    drawer calls `GET /api/patients/:id` so opening it is logged as a `read`.
+    The fresh copy also carries the latest `updatedAt`, which **Edit** passes
+    to the form for its conflict check.
+  - **Hidden while editing:** the drawer closes while the edit form is open
+    and comes back afterwards. With both open, Escape closed both, and the
+    drawer sat above the form's dimmed backdrop. It stays mounted while
+    hidden, so cancelling an edit doesn't re-fetch (or log another read).
+  - **Refreshes after a save** using the list's refresh counter, so it shows
+    the saved values. A delete closes it.
+  - In development, React's StrictMode runs effects twice, so one open logs
+    two reads (the first request is cancelled in the browser after the
+    server has logged it). Production builds don't.
 - **Add/edit form** (`PatientForm.jsx`, `@mantine/form`):
   - **Familiar fields, FHIR payload:** the form uses first/middle and
     street/unit fields; `toFormValues` / `toPayload` convert to and from the

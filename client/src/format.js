@@ -1,6 +1,16 @@
 // Display helpers. Birth dates arrive as 'YYYY-MM-DD' strings and are handled
 // as plain numbers, never JavaScript Dates, so time zones can't shift them.
 
+// Badge colour for each status, in the list and the patient view.
+export const STATUS_COLORS = {
+  planned: 'blue',
+  waitlist: 'yellow',
+  active: 'green',
+  onhold: 'orange',
+  finished: 'gray',
+  cancelled: 'red',
+};
+
 // "Robert James Okafor Jr. (Bobby)"
 export function displayName(patient) {
   const { name, preferredName } = patient;

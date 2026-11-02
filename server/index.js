@@ -7,6 +7,7 @@ import {
   createPatient,
   updatePatient,
   patientExists,
+  findPatient,
   findPatientsBornOn,
   markEnteredInError,
   transaction,
@@ -122,6 +123,16 @@ app.post('/api/patients/_search', async (req, res) => {
   // Only the patients on this page were shown, so only they are logged.
   await audit(req, 'query', { patientIds: patients.map((p) => p.id) });
   res.json({ patients, total, page: query.data.page, pageSize: query.data.pageSize });
+});
+
+// One patient's full record, for the patient view. Opening a record is logged
+// as a "read" before responding, so it can't be seen without being logged.
+app.get('/api/patients/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  const patient = id && (await findPatient(id));
+  if (!patient) return res.status(404).json({ error: 'Patient not found' });
+  await audit(req, 'read', { patientIds: [id] });
+  res.json(patient);
 });
 
 // Each write and its audit entry run in one transaction, so a change is
