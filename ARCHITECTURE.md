@@ -327,7 +327,7 @@ code. It's listed so the whole database is documented in one place.
 | DELETE | `/api/session` | Log out. Returns `204`. |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
 | POST | `/api/patients/_search` | One page of matching patients, excluding entered-in-error. Body: `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }`. Needs a `search` of at least 2 characters or a `status` (search-first); the rest are optional (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
-| GET | `/api/patients/_recent` | The logged-in provider's 10 most recently opened (`read`), added or edited patients in the last 30 days, from their audit entries. Returns `{ patients }`; logged as a `query`. Declared before `/:id`. |
+| GET | `/api/patients/_recent` | Patients the logged-in provider opened (`read`), added or edited in the last 30 days, from their audit entries: the 10 most recently updated, newest first. Returns `{ patients }`; logged as a `query`. Declared before `/:id`. |
 | GET | `/api/patients/:id` | One patient's full record, for the patient view. Logged as a `read` before responding. `404` if unknown or entered in error. |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. Send `If-Match: "<updatedAt>"` (the value the editor loaded) to refuse the save if someone changed the patient since; the form always does. |
@@ -442,7 +442,8 @@ The design comes from PRODUCT.md §7. In code:
   file that the rows matched.
 - **Recent patients are read from it:** `listRecentPatients` takes the
   provider's `read`, `create` and `update` entries from the last 30 days,
-  unnests their `patient_ids`, and keeps each patient's latest time. Showing
+  unnests their `patient_ids`, and returns those patients sorted by
+  `updated_at`, as the Updated column shows. Showing
   the list writes a `query` entry, which doesn't feed back into it.
 - **Opening a patient** writes a `read` entry before the record is sent,
   failing closed like a search.

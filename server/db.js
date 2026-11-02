@@ -241,22 +241,20 @@ export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
   return toPatient(rows[0]);
 }
 
-// The patients this provider most recently opened, added or edited, newest
-// first, from their own audit entries in the last `days` days. The audit log
-// already records exactly this, so no separate "recent" table is needed.
+// Patients this provider opened, added or edited in the last `days` days
+// (from their own audit entries, which already record exactly this), most
+// recently updated first, like the list's Updated column.
 export async function listRecentPatients(userId, { limit = 10, days = 30 } = {}) {
   const { rows } = await pool.query(
-    `SELECT patients.* FROM patients
-     JOIN (
-       SELECT patient_id, max(occurred_at) AS last_seen
-       FROM audit_log, unnest(patient_ids) AS patient_id
+    `SELECT * FROM patients
+     WHERE id IN (
+       SELECT unnest(patient_ids) FROM audit_log
        WHERE user_id = $1
          AND action IN ('read', 'create', 'update')
          AND occurred_at > now() - make_interval(days => $2::int)
-       GROUP BY patient_id
-     ) recent ON recent.patient_id = patients.id
-     WHERE patients.status <> $3
-     ORDER BY recent.last_seen DESC
+     )
+       AND status <> $3
+     ORDER BY updated_at DESC, id DESC
      LIMIT $4`,
     [userId, days, ENTERED_IN_ERROR, limit]
   );
