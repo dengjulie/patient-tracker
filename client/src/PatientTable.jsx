@@ -11,6 +11,11 @@ const TIME_COLUMNS = {
   viewed: { label: 'Viewed', field: 'viewedAt' },
 };
 
+// Fixed column widths (layout="fixed"), so columns stay put across searches,
+// worklists and recent patients instead of resizing to each list's longest
+// value. Long names wrap.
+const WIDTHS = { name: '30%', birthDate: '20%', status: '14%', place: '22%', time: '14%' };
+
 export default function PatientTable({ patients, statuses, onOpen, time: timeName = 'updated' }) {
   const time = TIME_COLUMNS[timeName];
   const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
@@ -18,14 +23,14 @@ export default function PatientTable({ patients, statuses, onOpen, time: timeNam
   return (
     <Paper withBorder radius="md">
       <Table.ScrollContainer minWidth={760}>
-        <Table striped highlightOnHover verticalSpacing="sm">
+        <Table striped highlightOnHover verticalSpacing="sm" layout="fixed">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Date of birth</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>City, State</Table.Th>
-              <Table.Th>{time.label}</Table.Th>
+              <Table.Th w={WIDTHS.name}>Name</Table.Th>
+              <Table.Th w={WIDTHS.birthDate}>Date of birth</Table.Th>
+              <Table.Th w={WIDTHS.status}>Status</Table.Th>
+              <Table.Th w={WIDTHS.place}>City, State</Table.Th>
+              <Table.Th w={WIDTHS.time}>{time.label}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>

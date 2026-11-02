@@ -111,7 +111,7 @@ patient-tracker/
         ├── LoginPage.jsx
         ├── PatientsPage.jsx  table, debounced search, status filter, paging
         ├── PatientDrawer.jsx side panel: patient view, or the add/edit form; logs a read
-        ├── PatientTable.jsx  patient table, shared by search results and recent patients
+        ├── PatientTable.jsx  patient table, shared by search results and recent patients (fixed column widths)
         ├── ListHeader.jsx    a list's title and one-line description (search, worklist, recent)
         ├── RecentPatients.jsx the provider's recent patients, before searching
         ├── PatientForm.jsx   add/edit form (shown in the side panel), delete confirmation
