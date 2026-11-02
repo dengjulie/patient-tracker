@@ -298,7 +298,9 @@ export async function listAuditEntries({ patientId, email, practice, action, sin
   };
   if (patientId) add('? = ANY (a.patient_ids)', patientId);
   if (email) add('lower(coalesce(u.email, a.attempted_email)) = lower(?)', email);
-  if (practice) add('p.name ILIKE ?', practice);
+  // Exact name, any case: a pattern (ILIKE) could match, and mix in, other
+  // practices' entries.
+  if (practice) add('lower(p.name) = lower(?)', practice);
   if (action) add('a.action = ?', action);
   if (since) add('a.occurred_at >= ?::date', since);
   params.push(limit);

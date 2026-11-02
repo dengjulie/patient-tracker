@@ -575,7 +575,7 @@ The design comes from PRODUCT.md §7. In code:
 - **Reviewing it:** `npm run audit` in `server/` (`audit-log.js`) prints the
   log newest first, with practice and user names instead of ids. Filters
   combine: `--patient 42` (who saw or changed patient 42), `--user <email>`,
-  `--practice <name>`, `--action <action>`, `--since <YYYY-MM-DD>`,
+  `--practice <name>` (exact name, any case), `--action <action>`, `--since <YYYY-MM-DD>`,
   `--limit <n>` (default 50). It reads with the owner login
   (`listAuditEntries`), so it covers every practice; it's for whoever runs
   the system, not providers. For anything else, SQL works too:
