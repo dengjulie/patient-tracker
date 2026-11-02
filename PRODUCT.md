@@ -382,6 +382,17 @@ goes on the list below.
 - **Audit log review screen** (high priority: HIPAA requires regular
   review), plus database-level append-only enforcement, before/after values
   for edits, and a retention policy (commonly 6 years)
+- **`npm run audit-log` hardening**, deferred while it's a small terminal
+  tool:
+  - `--since` should start at local midnight; today it uses the database's
+    time zone (UTC in Docker), so entries near midnight land on the wrong
+    side of the date.
+  - Clear messages instead of a stack trace for dates that don't exist
+    (`2026-02-30`) and patient ids too large for the database.
+  - Refuse empty or zero filters (`--patient=`, `--user=`, `--patient 0`),
+    which today mean "no filter" and show the whole log.
+  - Refuse `--limit 0`, which today says "No audit entries match."
+  - Tests for `listAuditEntries`.
 - Warn before closing the form with unsaved changes
 - Column sorting
 - Multiple addresses per patient (home vs mailing) and address history, in a
