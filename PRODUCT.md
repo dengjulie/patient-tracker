@@ -282,8 +282,9 @@ birth dates) and **audit log entries** (patient ids). Rules that follow:
 | HIPAA safeguard | Decision | Why |
 | --- | --- | --- |
 | Access control | **Login required** for every page and API call. | Each person has their own account, so actions can be traced to them. |
-| Who can see what | **Every provider sees all patients in the practice.** | Matches how small practices share coverage (vacations, on-call). Per-provider lists would add ownership and transfers. |
-| Account creation | **Created by an admin (script); no sign-up page.** | Healthcare accounts are issued by the practice. Public sign-up would let anyone on the internet see patient data. Reviewers get a demo login. |
+| Who can see what | **Providers see only their own practice's patients**, and every provider in a practice sees all of its patients. Each provider and each patient belongs to **one practice**. | One app serves many practices, and a practice's patient list is its own PHI. Inside a practice, everyone sees everyone, which matches how small practices share coverage (vacations, on-call); per-provider lists would add ownership and transfers. A provider who works at two practices gets two accounts for now. |
+| Practice isolation | **Enforced twice:** every database query filters by the provider's practice, *and* Postgres row-level security refuses other practices' rows even if a query forgets to. The practice comes from the provider's account, never from the request. Another practice's patient looks exactly like one that doesn't exist (404). | One missed filter would otherwise leak patients across practices, the most damaging bug this app could have. Saying "not found" rather than "forbidden" avoids confirming that a patient exists elsewhere. |
+| Account creation | **Created by an admin (script) in a named practice; no sign-up page.** | Healthcare accounts are issued by the practice. Public sign-up would let anyone on the internet see patient data. Reviewers get two demo logins in two practices, to see the isolation. |
 | Automatic logoff | **Sessions end after 15 minutes of inactivity.** Anything typed in an unsaved form is **discarded**, not restored after logging back in. | Unattended screens in clinics are a common exposure. Restoring drafts would mean keeping unsaved patient data in the browser. |
 | Audit controls | **An append-only audit log** (details below). | HIPAA requires it (164.312(b)), and it's how snooping, bad edits and breaches get investigated. |
 | Data in URLs | **Search terms are sent in the request body, never the URL.** | URLs end up in logs and browser history; leaking names and birth dates through them is a common exposure. |
@@ -399,7 +400,11 @@ goes on the list below.
 - Login rate limiting and account lockout after repeated failed attempts
 - Roles and permissions (e.g. front desk vs clinician), "break the glass"
   access to restricted records, and an admin screen for accounts
-- Multiple practices in one app
+- A provider working at several practices with one account (a membership
+  table and a practice switcher, like Slack workspaces)
+- Row-level security on the audit log too (today it's protected by
+  permissions: the app can only add entries, and reads only the provider's own)
+- Sharing a patient between practices (referrals), with consent tracking
 - HTTPS and deployment (required in production for HIPAA transmission security)
 
 **Intentionally not doing** (unless the need changes)

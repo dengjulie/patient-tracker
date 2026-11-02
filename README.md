@@ -45,7 +45,13 @@ npm run dev
 
 Then open **http://localhost:5173**.
 
-**Demo login:** `demo@example.com` / `demo-password` (created by `npm run seed`).
+**Demo logins** (created by `npm run seed`), one per practice, to see that
+providers only see their own practice's patients:
+
+| Email | Password | Practice |
+| --- | --- | --- |
+| `demo@example.com` | `demo-password` | Demo Practice (255 patients) |
+| `second@example.com` | `demo-password` | Second Demo Practice (20 patients) |
 
 ### Trying the API
 
@@ -71,8 +77,8 @@ All endpoints are listed in [ARCHITECTURE.md → API](ARCHITECTURE.md#api).
 | --- | --- |
 | `npm run dev` | Start the API and restart it on file changes. |
 | `npm start` | Start the API. |
-| `npm run seed` | Create the demo login, 5 hand-written edge-case patients and 250 generated ones with realistic history spread over two years (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
-| `npm run create-user -- <email> "<name>"` | Create a provider account and print a temporary password. There's no sign-up page by design ([PRODUCT.md §7](PRODUCT.md#7-security-and-privacy)). |
+| `npm run seed` | Create two demo practices with a login each: Demo Practice gets 5 hand-written edge-case patients and 250 generated ones, Second Demo Practice 20 generated ones, with realistic history spread over two years (skips anything already there). `npm run seed -- 5000` generates more, for scale testing. All data is fake. |
+| `npm run create-user -- <email> "<name>" "<practice>"` | Create a provider account in a practice (created if new) and print a temporary password. There's no sign-up page by design ([PRODUCT.md §7](PRODUCT.md#7-security-and-privacy)). |
 
 To reset the database: `docker compose down -v && docker compose up -d`, then
 `npm run seed`.
@@ -94,7 +100,7 @@ patient-tracker/
 │   ├── auth.js          passwords, sessions, login/logout
 │   ├── constants.js     FHIR status codes and US states
 │   ├── seed.js          demo login + fake patients (edge cases and generated)
-│   ├── create-user.js   admin script to add a provider account
+│   ├── create-user.js   admin script to add a provider account to a practice
 │   └── .env.example     config template (DATABASE_URL, SESSION_SECRET)
 └── client/              React front end (Vite + Mantine)
     ├── vite.config.js   dev server; proxies /api to Express

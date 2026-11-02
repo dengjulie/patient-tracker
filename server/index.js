@@ -11,7 +11,7 @@ import {
   listRecentPatients,
   findPatientsBornOn,
   markEnteredInError,
-  transaction,
+  withPractice,
 } from './db.js';
 import { sessions, requireAuth, login, logout, currentUser } from './auth.js';
 import { audit } from './audit.js';
@@ -99,6 +99,13 @@ app.delete('/api/session', logout);
 // Everything else under /api requires a logged-in provider.
 app.use('/api', requireAuth);
 
+// Runs `work` scoped to the logged-in provider's practice (see withPractice):
+// every patient route goes through this, so a provider only ever sees and
+// changes their own practice's patients. The practice comes from the session,
+// never from the request. Another practice's patient ids get a 404, the same
+// as ids that don't exist, so they don't even reveal that the patient exists.
+const inPractice = (req, work) => withPractice(req.session.user.practiceId, work);
+
 // Lists the form's dropdowns need, so the front end doesn't keep its own copy.
 app.get('/api/reference', (req, res) => {
   res.json({ statuses: STATUSES, states: US_STATES });
@@ -127,10 +134,13 @@ app.post('/api/patients/_search', async (req, res) => {
       error: `Send a search of at least ${MIN_SEARCH_LENGTH} characters or a status; page and pageSize (max 100) are positive integers`,
     });
   }
-  const { patients, total } = await listPatients(query.data);
-  // Logged before responding: if the audit write fails, no results are sent.
-  // Only the patients on this page were shown, so only they are logged.
-  await audit(req, 'query', { patientIds: patients.map((p) => p.id) });
+  const { patients, total } = await inPractice(req, async (db) => {
+    const found = await listPatients(db, query.data);
+    // Logged before responding: if the audit write fails, no results are sent.
+    // Only the patients on this page were shown, so only they are logged.
+    await audit(req, 'query', { patientIds: found.patients.map((p) => p.id) }, db);
+    return found;
+  });
   res.json({ patients, total, page: query.data.page, pageSize: query.data.pageSize });
 });
 
@@ -138,8 +148,11 @@ app.post('/api/patients/_search', async (req, res) => {
 // Showing them is logged like a search. Declared before /:id so "_recent"
 // isn't taken for an id.
 app.get('/api/patients/_recent', async (req, res) => {
-  const patients = await listRecentPatients(req.session.user.id);
-  await audit(req, 'query', { patientIds: patients.map((p) => p.id) });
+  const patients = await inPractice(req, async (db) => {
+    const recent = await listRecentPatients(db, req.session.user.id);
+    await audit(req, 'query', { patientIds: recent.map((p) => p.id) }, db);
+    return recent;
+  });
   res.json({ patients });
 });
 
@@ -147,9 +160,14 @@ app.get('/api/patients/_recent', async (req, res) => {
 // as a "read" before responding, so it can't be seen without being logged.
 app.get('/api/patients/:id', async (req, res) => {
   const id = parseId(req.params.id);
-  const patient = id && (await findPatient(id));
+  const patient =
+    id &&
+    (await inPractice(req, async (db) => {
+      const found = await findPatient(db, id);
+      if (found) await audit(req, 'read', { patientIds: [id] }, db);
+      return found;
+    }));
   if (!patient) return res.status(404).json({ error: 'Patient not found' });
-  await audit(req, 'read', { patientIds: [id] });
   res.json(patient);
 });
 
@@ -159,9 +177,9 @@ app.get('/api/patients/:id', async (req, res) => {
 app.post('/api/patients', async (req, res) => {
   const data = validate(req.body, res);
   if (!data) return;
-  const patient = await transaction(async (tx) => {
-    const created = await createPatient(data, tx);
-    await audit(req, 'create', { patientIds: [created.id] }, tx);
+  const patient = await inPractice(req, async (db) => {
+    const created = await createPatient(db, data);
+    await audit(req, 'create', { patientIds: [created.id] }, db);
     return created;
   });
   res.status(201).json(patient);
@@ -179,15 +197,17 @@ app.put('/api/patients/:id', async (req, res) => {
   if (!ifMatch.success) return res.status(412).json({ error: 'If-Match must be the patient\'s updatedAt' });
   const data = validate(req.body, res);
   if (!data) return;
-  const patient = await transaction(async (tx) => {
-    const updated = await updatePatient(id, data, ifMatch.data, tx);
-    if (updated) await audit(req, 'update', { patientIds: [id] }, tx);
-    return updated;
+  const { patient, exists } = await inPractice(req, async (db) => {
+    const updated = await updatePatient(db, id, data, ifMatch.data);
+    if (updated) {
+      await audit(req, 'update', { patientIds: [id] }, db);
+      return { patient: updated };
+    }
+    // Not updated: either someone else saved it first, or it isn't ours.
+    return { exists: await patientExists(db, id) };
   });
   if (!patient) {
-    if (ifMatch.data && (await patientExists(id))) {
-      return res.status(412).json({ error: 'Someone else changed this patient' });
-    }
+    if (ifMatch.data && exists) return res.status(412).json({ error: 'Someone else changed this patient' });
     return res.status(404).json({ error: 'Patient not found' });
   }
   res.json(patient);
@@ -213,32 +233,31 @@ app.post('/api/patients/_import', async (req, res) => {
   const { patients, dryRun, includeDuplicates } = body.data;
   const rows = patients.map(parsePatient);
   const birthDates = [...new Set(rows.filter((row) => row.data).map((row) => row.data.birthDate))];
-  const { matchedIds, ...plan } = planImport(rows, await findPatientsBornOn(birthDates));
-  // The plan reveals which patients are already on file, so it's logged like
-  // a search, before responding.
-  await audit(req, 'query', { patientIds: matchedIds });
-  if (dryRun) return res.json(plan);
 
-  const toCreate = [...plan.ready, ...(includeDuplicates ? plan.duplicates.map((d) => d.index) : [])];
-  let created = 0;
-  if (toCreate.length) {
-    // One transaction: the whole import and its audit entry, or nothing.
-    await transaction(async (tx) => {
-      const ids = [];
-      for (const index of toCreate) ids.push((await createPatient(rows[index].data, tx)).id);
-      await audit(req, 'create', { patientIds: ids }, tx);
-      created = ids.length;
-    });
-  }
-  res.json({ ...plan, created });
+  // One transaction: the check against existing patients (only this
+  // practice's), the whole import and its audit entries, or nothing.
+  const result = await inPractice(req, async (db) => {
+    const { matchedIds, ...plan } = planImport(rows, await findPatientsBornOn(db, birthDates));
+    // The plan reveals which patients are already on file, so it's logged
+    // like a search, before responding.
+    await audit(req, 'query', { patientIds: matchedIds }, db);
+    if (dryRun) return plan;
+
+    const toCreate = [...plan.ready, ...(includeDuplicates ? plan.duplicates.map((d) => d.index) : [])];
+    const ids = [];
+    for (const index of toCreate) ids.push((await createPatient(db, rows[index].data)).id);
+    if (ids.length) await audit(req, 'create', { patientIds: ids }, db);
+    return { ...plan, created: ids.length };
+  });
+  res.json(result);
 });
 
 app.delete('/api/patients/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(404).json({ error: 'Patient not found' });
-  const found = await transaction(async (tx) => {
-    const marked = await markEnteredInError(id, tx);
-    if (marked) await audit(req, 'delete', { patientIds: [id] }, tx);
+  const found = await inPractice(req, async (db) => {
+    const marked = await markEnteredInError(db, id);
+    if (marked) await audit(req, 'delete', { patientIds: [id] }, db);
     return marked;
   });
   if (!found) return res.status(404).json({ error: 'Patient not found' });

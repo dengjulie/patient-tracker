@@ -1,8 +1,11 @@
-// Fills an empty database with a demo login and fake patients for development:
-// five hand-written edge cases (PRODUCT.md §1: middle names, a suffix, a
-// preferred name, a prefix, one name only) plus generated patients.
+// Fills an empty database with two demo practices for development, each with
+// its own login, so practice isolation can be seen side by side:
+// - Demo Practice: five hand-written edge cases (PRODUCT.md §1: middle
+//   names, a suffix, a preferred name, a prefix, one name only) plus
+//   generated patients.
+// - Second Demo Practice: a few generated patients of its own.
 //
-//   npm run seed            5 edge cases + 250 generated patients
+//   npm run seed            Demo Practice gets 5 edge cases + 250 generated
 //   npm run seed -- 5000    5 edge cases + 5000 (for scale testing)
 //
 // All data is fake (PRODUCT.md §7: seed data must never be real PHI).
@@ -10,15 +13,29 @@ import {
   fakerEN_US, fakerES_MX, fakerVI, fakerPT_BR, fakerFR, fakerPL, fakerTR,
 } from '@faker-js/faker';
 import {
-  pool, initDb, listPatients, createPatient, setPatientTimestamps, createUser, findUserByEmail, transaction,
+  pool, initDb, withPractice, listPatients, createPatient, setPatientTimestamps,
+  createUser, findUserByEmail, findOrCreatePractice, DEFAULT_PRACTICE,
 } from './db.js';
 import { hashPassword } from './auth.js';
 
 const GENERATED_COUNT = Number(process.argv[2] ?? 250);
 
-// A known password so reviewers can log in. Real accounts get a random one
+// Known passwords so reviewers can log in. Real accounts get a random one
 // from create-user.js.
-const DEMO_USER = { email: 'demo@example.com', name: 'Demo Provider', password: 'demo-password' };
+const DEMO_PRACTICES = [
+  {
+    name: DEFAULT_PRACTICE,
+    user: { email: 'demo@example.com', name: 'Demo Provider', password: 'demo-password' },
+    withEdgeCases: true,
+    generatedCount: GENERATED_COUNT,
+  },
+  {
+    name: 'Second Demo Practice',
+    user: { email: 'second@example.com', name: 'Second Provider', password: 'demo-password' },
+    withEdgeCases: false,
+    generatedCount: 20,
+  },
+];
 
 const address = (line, city, state, postalCode) => ({ line, city, state, postalCode });
 
@@ -132,24 +149,30 @@ function generatedHistory() {
 
 await initDb();
 
-if (await findUserByEmail(DEMO_USER.email)) {
-  console.log('Demo user already exists; skipping.');
-} else {
-  await createUser({ ...DEMO_USER, passwordHash: await hashPassword(DEMO_USER.password) });
-  console.log(`Created demo login: ${DEMO_USER.email} / ${DEMO_USER.password}`);
-}
+for (const demo of DEMO_PRACTICES) {
+  const { practice } = await findOrCreatePractice(demo.name);
 
-if ((await listPatients()).total > 0) {
-  console.log('Database already has patients; skipping seed.');
-} else {
-  const patients = [...samples, ...Array.from({ length: GENERATED_COUNT }, generatePatient)];
-  // One transaction: much faster than committing each insert separately.
-  await transaction(async (tx) => {
-    for (const [i, patient] of patients.entries()) {
-      const created = await createPatient(patient, tx);
-      await setPatientTimestamps(created.id, i < samples.length ? edgeCaseHistory(i) : generatedHistory(), tx);
+  if (await findUserByEmail(demo.user.email)) {
+    console.log(`${demo.user.email} already exists; skipping.`);
+  } else {
+    await createUser({ ...demo.user, practiceId: practice.id, passwordHash: await hashPassword(demo.user.password) });
+    console.log(`Created login for ${practice.name}: ${demo.user.email} / ${demo.user.password}`);
+  }
+
+  // Inserted through withPractice, like the app's own writes. One
+  // transaction per practice: much faster than committing each insert.
+  await withPractice(practice.id, async (db) => {
+    if ((await listPatients(db)).total > 0) {
+      console.log(`${practice.name} already has patients; skipping.`);
+      return;
     }
+    const edgeCases = demo.withEdgeCases ? samples : [];
+    const patients = [...edgeCases, ...Array.from({ length: demo.generatedCount }, generatePatient)];
+    for (const [i, patient] of patients.entries()) {
+      const created = await createPatient(db, patient);
+      await setPatientTimestamps(db, created.id, i < edgeCases.length ? edgeCaseHistory(i) : generatedHistory());
+    }
+    console.log(`Seeded ${practice.name} with ${patients.length} patients.`);
   });
-  console.log(`Seeded ${patients.length} patients (${samples.length} edge cases + ${GENERATED_COUNT} generated).`);
 }
 await pool.end();

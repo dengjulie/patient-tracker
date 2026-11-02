@@ -20,7 +20,16 @@ const ALL_STATUS_CODES = [...STATUSES.map((s) => s.code), ENTERED_IN_ERROR];
 // "read" is opening one patient's full record.
 export const AUDIT_ACTIONS = ['create', 'read', 'update', 'delete', 'query', 'login', 'login_failed', 'logout'];
 
-// Creates the table if it doesn't exist yet. Called once at startup.
+// The restricted database role patient queries run as (see withPractice).
+// It can't log in, isn't a superuser, and has no DELETE rights, so Postgres
+// row-level security applies to it and records can't be erased through it.
+const APP_ROLE = 'patient_tracker_app';
+
+// The practice existing data joins when a database from before practices is
+// upgraded (see initDb), and the seed's main demo practice.
+export const DEFAULT_PRACTICE = 'Demo Practice';
+
+// Creates the tables if they don't exist yet. Called once at startup.
 // - One column per field keeps queries simple; the API speaks the nested,
 //   FHIR-shaped JSON, and toPatient/toRow translate between the two.
 // - name_text is FHIR's HumanName.text: the full display name, kept for search.
@@ -29,8 +38,17 @@ export async function initDb() {
   await pool.query(`
     CREATE EXTENSION IF NOT EXISTS unaccent;
 
+    -- Each provider and each patient belongs to one practice, and providers
+    -- see only their own practice's patients (PRODUCT.md §7).
+    CREATE TABLE IF NOT EXISTS practices (
+      id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      name       TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS patients (
       id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      practice_id    INTEGER NOT NULL REFERENCES practices (id),
       name_prefix    TEXT NOT NULL DEFAULT '',
       given_names    TEXT[] NOT NULL DEFAULT '{}',
       family_name    TEXT NOT NULL DEFAULT '',
@@ -47,14 +65,12 @@ export async function initDb() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
     );
-    -- Matches the list's sort order, so a page can be read straight from the
-    -- index instead of sorting every patient.
-    CREATE INDEX IF NOT EXISTS patients_updated_at_idx ON patients (updated_at DESC, id DESC);
 
     -- Provider accounts. Created by script, never by sign-up (PRODUCT.md §7).
     -- Emails are stored lowercased so login is case-insensitive.
     CREATE TABLE IF NOT EXISTS users (
       id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      practice_id   INTEGER NOT NULL REFERENCES practices (id),
       email         TEXT NOT NULL UNIQUE,
       name          TEXT NOT NULL,
       password_hash TEXT NOT NULL,
@@ -67,6 +83,7 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS audit_log (
       id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+      practice_id     INTEGER REFERENCES practices (id),
       user_id         INTEGER REFERENCES users (id),
       action          TEXT NOT NULL,
       patient_ids     INTEGER[] NOT NULL DEFAULT '{}',
@@ -75,6 +92,51 @@ export async function initDb() {
     );
     -- For each provider's recent patients (listRecentPatients).
     CREATE INDEX IF NOT EXISTS audit_log_user_idx ON audit_log (user_id, occurred_at);
+
+    -- Upgrades a database from before practices: adds the columns, and puts
+    -- every existing patient and provider in one practice. Does nothing on a
+    -- new or already-upgraded database.
+    ALTER TABLE patients ADD COLUMN IF NOT EXISTS practice_id INTEGER REFERENCES practices (id);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS practice_id INTEGER REFERENCES practices (id);
+    ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS practice_id INTEGER REFERENCES practices (id);
+    INSERT INTO practices (name) SELECT '${DEFAULT_PRACTICE}'
+      WHERE EXISTS (SELECT 1 FROM patients WHERE practice_id IS NULL)
+         OR EXISTS (SELECT 1 FROM users WHERE practice_id IS NULL)
+      ON CONFLICT (name) DO NOTHING;
+    UPDATE patients SET practice_id = (SELECT id FROM practices WHERE name = '${DEFAULT_PRACTICE}')
+      WHERE practice_id IS NULL;
+    UPDATE users SET practice_id = (SELECT id FROM practices WHERE name = '${DEFAULT_PRACTICE}')
+      WHERE practice_id IS NULL;
+    UPDATE audit_log SET practice_id = users.practice_id FROM users
+      WHERE audit_log.user_id = users.id AND audit_log.practice_id IS NULL;
+    ALTER TABLE patients ALTER COLUMN practice_id SET NOT NULL;
+    ALTER TABLE users ALTER COLUMN practice_id SET NOT NULL;
+
+    -- Matches the list's filter and sort order, so a page can be read
+    -- straight from the index instead of sorting the practice's patients.
+    DROP INDEX IF EXISTS patients_updated_at_idx;
+    CREATE INDEX IF NOT EXISTS patients_practice_updated_idx
+      ON patients (practice_id, updated_at DESC, id DESC);
+
+    -- Row-level security: as APP_ROLE, a query sees and writes only patients
+    -- of the practice set for the transaction (app.practice_id). With no
+    -- practice set, it sees none. This holds even if a query forgets to
+    -- filter by practice. Superusers and the table owner bypass it, which is
+    -- why patient queries switch to APP_ROLE.
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${APP_ROLE}') THEN
+        CREATE ROLE ${APP_ROLE} NOLOGIN;
+      END IF;
+    END $$;
+    GRANT SELECT, INSERT, UPDATE ON patients TO ${APP_ROLE};
+    GRANT SELECT, INSERT ON audit_log TO ${APP_ROLE};
+    ALTER TABLE patients ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS own_practice ON patients;
+    -- NULLIF: after a transaction ends the setting reads as '' (not NULL),
+    -- which can't be cast to an integer.
+    CREATE POLICY own_practice ON patients
+      USING (practice_id = NULLIF(current_setting('app.practice_id', true), '')::int)
+      WITH CHECK (practice_id = NULLIF(current_setting('app.practice_id', true), '')::int);
 
     -- Recreated on every start, so a database made before an action was
     -- added to AUDIT_ACTIONS accepts it too.
@@ -102,25 +164,63 @@ export async function transaction(work) {
   }
 }
 
+// Runs `work` in a transaction scoped to one practice: as APP_ROLE, with
+// app.practice_id set, so row-level security limits every patient query to
+// that practice. `work` gets a `db` whose `practiceId` the queries below also
+// filter on explicitly; either check alone keeps other practices' patients
+// out. Every patient query goes through here (the functions below take this
+// `db` and have no default), so none can run unscoped by accident.
+export async function withPractice(practiceId, work) {
+  if (!Number.isInteger(practiceId)) throw new Error('withPractice needs a practice id');
+  return transaction(async (client) => {
+    await client.query(`SET LOCAL ROLE ${APP_ROLE}`);
+    await client.query(`SELECT set_config('app.practice_id', $1, true)`, [String(practiceId)]);
+    return work({ query: (text, params) => client.query(text, params), practiceId });
+  });
+}
+
 // `db` is the pool by default, or a transaction's client.
-export async function recordAudit({ userId, action, patientIds = [], attemptedEmail = null, ipAddress }, db = pool) {
+export async function recordAudit(
+  { practiceId = null, userId, action, patientIds = [], attemptedEmail = null, ipAddress },
+  db = pool
+) {
   await db.query(
-    `INSERT INTO audit_log (user_id, action, patient_ids, attempted_email, ip_address)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [userId, action, patientIds, attemptedEmail, ipAddress]
+    `INSERT INTO audit_log (practice_id, user_id, action, patient_ids, attempted_email, ip_address)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [practiceId, userId, action, patientIds, attemptedEmail, ipAddress]
   );
 }
 
-export async function createUser({ email, name, passwordHash }) {
+// The practice with this name, created if it doesn't exist yet, plus
+// whether it was just created. For the seed and create-user scripts; there's
+// no practice sign-up.
+export async function findOrCreatePractice(name) {
+  const inserted = await pool.query(
+    `INSERT INTO practices (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *`,
+    [name]
+  );
+  if (inserted.rows[0]) return { practice: inserted.rows[0], created: true };
+  const { rows } = await pool.query(`SELECT * FROM practices WHERE name = $1`, [name]);
+  return { practice: rows[0], created: false };
+}
+
+export async function createUser({ practiceId, email, name, passwordHash }) {
   const { rows } = await pool.query(
-    `INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, name`,
-    [email.toLowerCase(), name, passwordHash]
+    `INSERT INTO users (practice_id, email, name, password_hash) VALUES ($1, $2, $3, $4)
+     RETURNING id, email, name`,
+    [practiceId, email.toLowerCase(), name, passwordHash]
   );
   return rows[0];
 }
 
+// Includes the practice's name, for showing which practice is logged in.
 export async function findUserByEmail(email) {
-  const { rows } = await pool.query(`SELECT * FROM users WHERE email = $1`, [email.toLowerCase()]);
+  const { rows } = await pool.query(
+    `SELECT users.*, practices.name AS practice_name
+     FROM users JOIN practices ON practices.id = users.practice_id
+     WHERE users.email = $1`,
+    [email.toLowerCase()]
+  );
   return rows[0];
 }
 
@@ -179,10 +279,13 @@ const COLUMNS = [
 const SEARCHABLE = `unaccent(name_text || ' ' || preferred_name || ' ' ||
   to_char(birth_date, 'YYYY-MM-DD') || ' ' || to_char(birth_date, 'MM/DD/YYYY'))`;
 
+// Every function below takes the `db` from withPractice and works only on
+// that practice's patients (also enforced by row-level security).
+
 // Returns one page of matching patients plus the total number of matches.
-export async function listPatients({ search = '', status = '', page = 1, pageSize = 25 } = {}) {
-  const params = [ENTERED_IN_ERROR];
-  const conditions = ['status <> $1'];
+export async function listPatients(db, { search = '', status = '', page = 1, pageSize = 25 } = {}) {
+  const params = [db.practiceId, ENTERED_IN_ERROR];
+  const conditions = ['practice_id = $1', 'status <> $2'];
 
   if (status) {
     params.push(status);
@@ -198,9 +301,9 @@ export async function listPatients({ search = '', status = '', page = 1, pageSiz
   }
 
   const where = conditions.join(' AND ');
-  const { rows: countRows } = await pool.query(`SELECT count(*)::int AS total FROM patients WHERE ${where}`, params);
+  const { rows: countRows } = await db.query(`SELECT count(*)::int AS total FROM patients WHERE ${where}`, params);
 
-  const { rows } = await pool.query(
+  const { rows } = await db.query(
     `SELECT * FROM patients
      WHERE ${where}
      -- Most recently updated first (PRODUCT.md §6). id breaks ties, so the
@@ -212,14 +315,11 @@ export async function listPatients({ search = '', status = '', page = 1, pageSiz
   return { patients: rows.map(toPatient), total: countRows[0].total };
 }
 
-// The write functions below take an optional `db` (a transaction's client),
-// so routes can write the patient and its audit entry together.
-
-export async function createPatient(patient, db = pool) {
-  const placeholders = COLUMNS.map((_, i) => `$${i + 1}`).join(', ');
+export async function createPatient(db, patient) {
+  const placeholders = COLUMNS.map((_, i) => `$${i + 2}`).join(', ');
   const { rows } = await db.query(
-    `INSERT INTO patients (${COLUMNS.join(', ')}) VALUES (${placeholders}) RETURNING *`,
-    toRow(patient)
+    `INSERT INTO patients (practice_id, ${COLUMNS.join(', ')}) VALUES ($1, ${placeholders}) RETURNING *`,
+    [db.practiceId, ...toRow(patient)]
   );
   return toPatient(rows[0]);
 }
@@ -229,16 +329,17 @@ export async function createPatient(patient, db = pool) {
 // given and the patient has been saved since then (someone else's edit).
 // updated_at is compared to the millisecond because that's all the API's
 // JSON timestamps carry; Postgres stores microseconds.
-export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
+export async function updatePatient(db, id, patient, ifUpdatedAt) {
+  const n = COLUMNS.length;
   const assignments = COLUMNS.map((column, i) => `${column} = $${i + 1}`).join(', ');
   const { rows } = await db.query(
     `UPDATE patients SET ${assignments}, updated_at = now()
-     WHERE id = $${COLUMNS.length + 1}
-       AND status <> $${COLUMNS.length + 3}
-       AND ($${COLUMNS.length + 2}::timestamptz IS NULL
-            OR date_trunc('milliseconds', updated_at) = $${COLUMNS.length + 2})
+     WHERE id = $${n + 1}
+       AND practice_id = $${n + 2}
+       AND status <> $${n + 3}
+       AND ($${n + 4}::timestamptz IS NULL OR date_trunc('milliseconds', updated_at) = $${n + 4})
      RETURNING *`,
-    [...toRow(patient), id, ifUpdatedAt ?? null, ENTERED_IN_ERROR]
+    [...toRow(patient), id, db.practiceId, ENTERED_IN_ERROR, ifUpdatedAt ?? null]
   );
   return toPatient(rows[0]);
 }
@@ -246,8 +347,8 @@ export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
 // Patients this provider opened, added or edited in the last `days` days
 // (from their own audit entries, which already record exactly this), most
 // recently updated first, like the list's Updated column.
-export async function listRecentPatients(userId, { limit = 10, days = 30 } = {}) {
-  const { rows } = await pool.query(
+export async function listRecentPatients(db, userId, { limit = 10, days = 30 } = {}) {
+  const { rows } = await db.query(
     `SELECT * FROM patients
      WHERE id IN (
        SELECT unnest(patient_ids) FROM audit_log
@@ -255,49 +356,55 @@ export async function listRecentPatients(userId, { limit = 10, days = 30 } = {})
          AND action IN ('read', 'create', 'update')
          AND occurred_at > now() - make_interval(days => $2::int)
      )
-       AND status <> $3
+       AND practice_id = $3
+       AND status <> $4
      ORDER BY updated_at DESC, id DESC
-     LIMIT $4`,
-    [userId, days, ENTERED_IN_ERROR, limit]
+     LIMIT $5`,
+    [userId, days, db.practiceId, ENTERED_IN_ERROR, limit]
   );
   return rows.map(toPatient);
 }
 
 // One patient, unless it was entered in error (hidden everywhere, like the list).
-export async function findPatient(id, db = pool) {
-  const { rows } = await db.query(`SELECT * FROM patients WHERE id = $1 AND status <> $2`, [id, ENTERED_IN_ERROR]);
+export async function findPatient(db, id) {
+  const { rows } = await db.query(
+    `SELECT * FROM patients WHERE id = $1 AND practice_id = $2 AND status <> $3`,
+    [id, db.practiceId, ENTERED_IN_ERROR]
+  );
   return toPatient(rows[0]);
 }
 
 // Whether a patient (not entered in error) has this id.
-export async function patientExists(id, db = pool) {
-  const { rowCount } = await db.query(`SELECT 1 FROM patients WHERE id = $1 AND status <> $2`, [id, ENTERED_IN_ERROR]);
-  return rowCount > 0;
+export async function patientExists(db, id) {
+  return Boolean(await findPatient(db, id));
 }
 
 // Current patients (not entered in error) born on any of these dates. The CSV
 // import uses this to find patients a file may already contain.
-export async function findPatientsBornOn(birthDates, db = pool) {
+export async function findPatientsBornOn(db, birthDates) {
   const { rows } = await db.query(
-    `SELECT * FROM patients WHERE birth_date = ANY($1::date[]) AND status <> $2`,
-    [birthDates, ENTERED_IN_ERROR]
+    `SELECT * FROM patients WHERE birth_date = ANY($1::date[]) AND practice_id = $2 AND status <> $3`,
+    [birthDates, db.practiceId, ENTERED_IN_ERROR]
   );
   return rows.map(toPatient);
 }
 
 // Only seed.js uses this, to spread fake patients' history over time so the
 // demo list (sorted by updated_at) looks like real use.
-export async function setPatientTimestamps(id, { createdAt, updatedAt }, db = pool) {
-  await db.query(`UPDATE patients SET created_at = $1, updated_at = $2 WHERE id = $3`, [createdAt, updatedAt, id]);
+export async function setPatientTimestamps(db, id, { createdAt, updatedAt }) {
+  await db.query(
+    `UPDATE patients SET created_at = $1, updated_at = $2 WHERE id = $3 AND practice_id = $4`,
+    [createdAt, updatedAt, id, db.practiceId]
+  );
 }
 
 // "Delete" never erases a medical record. It marks it as entered in error,
 // which hides it from the list (see PRODUCT.md §5). Returns false if there's
 // no such patient or it was already deleted.
-export async function markEnteredInError(id, db = pool) {
+export async function markEnteredInError(db, id) {
   const { rowCount } = await db.query(
-    `UPDATE patients SET status = $1, updated_at = now() WHERE id = $2 AND status <> $1`,
-    [ENTERED_IN_ERROR, id]
+    `UPDATE patients SET status = $1, updated_at = now() WHERE id = $2 AND practice_id = $3 AND status <> $1`,
+    [ENTERED_IN_ERROR, id, db.practiceId]
   );
   return rowCount > 0;
 }

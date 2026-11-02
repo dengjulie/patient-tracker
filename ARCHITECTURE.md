@@ -95,7 +95,7 @@ patient-tracker/
 │   ├── audit.js        builds an audit entry from the request
 │   ├── auth.js         password hashing, sessions, login/logout, requireAuth
 │   ├── constants.js    status list (FHIR) and US state list
-│   ├── create-user.js  admin script: create a provider account
+│   ├── create-user.js  admin script: create a provider account in a practice
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── import.js       sorts CSV import rows: ready, already imported, duplicates, invalid
 │   ├── index.js        Express routes + Zod validation
@@ -179,11 +179,19 @@ explains it. **Update this section whenever the schema changes.**
 
 ```mermaid
 erDiagram
+    practices ||--o{ users : "employs"
+    practices ||--o{ patients : "owns"
     users ||--o{ audit_log : "performs"
     patients }o--o{ audit_log : "appears in (patient_ids[])"
 
+    practices {
+        integer id PK
+        text name UK
+        timestamptz created_at
+    }
     patients {
         integer id PK
+        integer practice_id FK "row-level security
         text name_prefix
         text_array given_names
         text family_name
@@ -202,6 +210,7 @@ erDiagram
     }
     users {
         integer id PK
+        integer practice_id FK
         text email UK "lowercased"
         text name
         text password_hash "scrypt salt:hash"
@@ -210,8 +219,9 @@ erDiagram
     audit_log {
         bigint id PK
         timestamptz occurred_at
+        integer practice_id FK
         integer user_id FK
-        text action "CHECK: 7 actions"
+        text action "CHECK: 8 actions"
         integer_array patient_ids
         text attempted_email
         text ip_address
@@ -223,6 +233,17 @@ erDiagram
     }
 ```
 
+### `practices`
+
+A clinic or group using the app. Every provider and every patient belongs to
+exactly one, and providers see only their own practice's patients.
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | `INTEGER` | PK, identity | |
+| `name` | `TEXT` | not null, unique | Created by `create-user.js` or the seed. |
+| `created_at` | `TIMESTAMPTZ` | not null, default `now()` | |
+
 ### `patients`
 
 One row per patient. Columns are flat and `snake_case` (the Postgres
@@ -231,6 +252,7 @@ convention); the API converts them to nested, FHIR-shaped JSON.
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
 | `id` | `INTEGER` | PK, identity | Works like a medical record number, so it's PHI. |
+| `practice_id` | `INTEGER` | not null, FK → `practices.id` | The practice the patient belongs to. Enforced by row-level security (see [Practice isolation](#practice-isolation)). |
 | `name_prefix` | `TEXT` | not null, default `''` | FHIR `name.prefix` (Dr., Mx.). |
 | `given_names` | `TEXT[]` | not null, default `{}` | FHIR `name.given`: first and middle names, in order. |
 | `family_name` | `TEXT` | not null, default `''` | FHIR `name.family`. Empty for patients with only one name. |
@@ -244,7 +266,7 @@ convention); the API converts them to nested, FHIR-shaped JSON.
 | `city` | `TEXT` | not null | |
 | `state` | `TEXT` | not null | 2-letter code; the API checks it against the 59 US codes. |
 | `postal_code` | `TEXT` | not null | Text, so leading zeros survive (`02110`). |
-| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` | `updated_at` is set on every edit and drives the list's sort order (indexed with `id`). |
+| `created_at`, `updated_at` | `TIMESTAMPTZ` | not null, default `now()` | `updated_at` is set on every edit and drives the list's sort order (index `patients_practice_updated_idx` on `practice_id, updated_at DESC, id DESC`). |
 
 - **Status check in the database:** the API validates the status, and the
   `CHECK` constraint backs it up, so the database itself rejects anything
@@ -261,6 +283,7 @@ Provider accounts, created by `create-user.js` (no sign-up).
 | Column | Type | Constraints | Notes |
 | --- | --- | --- | --- |
 | `id` | `INTEGER` | PK, identity | |
+| `practice_id` | `INTEGER` | not null, FK → `practices.id` | The only practice whose patients this provider sees. |
 | `email` | `TEXT` | not null, unique | Stored lowercased, so login ignores case. |
 | `name` | `TEXT` | not null | |
 | `password_hash` | `TEXT` | not null | `salt:hash` from scrypt. Never returned by the API. |
@@ -275,6 +298,7 @@ ids, never names or search terms.
 | --- | --- | --- | --- |
 | `id` | `BIGINT` | PK, identity | `BIGINT` because this table grows fastest. |
 | `occurred_at` | `TIMESTAMPTZ` | not null, default `now()` | |
+| `practice_id` | `INTEGER` | FK → `practices.id`, nullable | The provider's practice, so each practice's log can be reviewed on its own. Null only for a failed login with an unknown email. |
 | `user_id` | `INTEGER` | FK → `users.id`, nullable | Null only for a failed login with an unknown email. |
 | `action` | `TEXT` | not null, `CHECK` | `create`, `read`, `update`, `delete`, `query`, `login`, `login_failed`, `logout`. The `CHECK` is recreated from `AUDIT_ACTIONS` on every start, so an existing database accepts newly added actions. |
 | `patient_ids` | `INTEGER[]` | not null, default `{}` | Every patient the action touched or showed. |
@@ -296,7 +320,7 @@ code. It's listed so the whole database is documented in one place.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `sid` | `VARCHAR` PK | The session id held in the browser's cookie. |
-| `sess` | `JSON` | Session data, including the logged-in user (`id`, `email`, `name`). |
+| `sess` | `JSON` | Session data, including the logged-in user (`id`, `email`, `name`, `practiceId`, `practiceName`). |
 | `expire` | `TIMESTAMP` | Indexed. Pushed 15 minutes ahead on every request (idle logoff). Expired rows are removed automatically. |
 
 ### Conventions
@@ -400,11 +424,14 @@ All routes except `/api/session` return `401` without a valid session.
 
 ## Authentication
 
-- **Accounts:** the [`users`](#users) table.
-  - Accounts are created with `npm run create-user -- <email> "<name>"`,
-    which prints a random temporary password once.
-  - `npm run seed` also creates the demo login `demo@example.com` /
-    `demo-password`.
+- **Accounts:** the [`users`](#users) table. Each belongs to one practice.
+  - Accounts are created with
+    `npm run create-user -- <email> "<name>" "<practice>"`, which prints a
+    random temporary password once. The practice is created if it doesn't
+    exist yet, and the script says so, so a typo is noticed.
+  - `npm run seed` also creates two demo logins in two practices:
+    `demo@example.com` (Demo Practice) and `second@example.com` (Second Demo
+    Practice), both with password `demo-password`.
 - **Passwords:** hashed with `scrypt` and a random 16-byte salt, stored as
   `salt:hash`. They're checked with `timingSafeEqual`.
 - **Login failures:**
@@ -427,6 +454,54 @@ All routes except `/api/session` return `401` without a valid session.
   minutes of *inactivity*.
 - **Who sees what:** any logged-in provider sees all patients (PRODUCT.md §7),
   so `requireAuth` only checks that someone is logged in.
+
+## Practice isolation
+
+Providers see only their own practice's patients (PRODUCT.md §7). Two
+independent layers enforce it, so a bug in one doesn't leak patients:
+
+1. **Every query filters by practice.** Every patient function in `db.js`
+   takes a `db` from `withPractice(practiceId, work)` as its first argument,
+   with no default, and adds `practice_id = db.practiceId` to its SQL. A
+   query can't run without a practice scope by accident. Routes get that
+   scope from `inPractice(req, …)`, which reads the practice from the
+   **session**, set at login from the account. The request never supplies it.
+2. **Postgres row-level security (RLS).** `withPractice` runs `work` in a
+   transaction that first runs `SET LOCAL ROLE patient_tracker_app` and
+   `set_config('app.practice_id', …, true)`. The `own_practice` policy on
+   `patients` lets that role see and write only rows whose `practice_id`
+   matches. Both settings are `LOCAL`, so they end with the transaction and
+   never leak to the next request on the pooled connection.
+   - **Why a separate role:** the app connects as `postgres`, and
+     superusers (and table owners) bypass RLS. `patient_tracker_app` can't
+     log in, isn't a superuser, and only has `SELECT, INSERT, UPDATE` on
+     `patients` and `SELECT, INSERT` on `audit_log`. So the database itself
+     also refuses hard deletes of patients and any edit or deletion of audit
+     entries, from any patient request.
+   - **Fails closed:** with no practice set, the policy matches nothing.
+   - Created in `initDb` (`CREATE ROLE` needs a database user allowed to
+     create roles; locally that's `postgres`).
+
+What's still unscoped, on purpose: logging in (it must find the account
+before knowing the practice), the session store, and the admin scripts.
+
+**Results** for another practice's patient id are `404`, the same as an id
+that doesn't exist, so they don't reveal that the patient exists. Import
+duplicate checks and recent patients only look inside the practice too.
+
+**Tested** against the running server, as two providers in two practices:
+- **Through the API:** reading, editing (with and without `If-Match`) and
+  deleting the other practice's patient all return `404`. Searches and
+  imports never match across practices.
+- **Directly in Postgres, as `patient_tracker_app`:**
+  - a query with no `WHERE` clause returns only the current practice;
+  - no practice set returns nothing;
+  - inserting into or moving a patient to another practice is refused;
+  - `DELETE` on `patients` and `UPDATE`/`DELETE` on `audit_log` are refused.
+
+**Upgrading an existing database:** `initDb` adds the `practice_id` columns
+and puts all existing patients and providers in a "Demo Practice". Sessions
+from before have no practice, so `requireAuth` asks them to log in again.
 
 ## Audit log
 

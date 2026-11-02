@@ -47,9 +47,11 @@ export const sessions = session({
   },
 });
 
-// Blocks every request without a logged-in user.
+// Blocks every request without a logged-in user. A session without a
+// practice (from before practices existed) must log in again, since every
+// patient request is scoped to the session's practice.
 export function requireAuth(req, res, next) {
-  if (!req.session.user) return res.status(401).json({ error: 'Please log in' });
+  if (!req.session.user?.practiceId) return res.status(401).json({ error: 'Please log in' });
   next();
 }
 
@@ -65,13 +67,21 @@ export async function login(req, res) {
   if (!user || !valid) {
     // The attempted email is kept so repeated failures against one account
     // (or many accounts) show up in the audit log.
-    await audit(req, 'login_failed', { userId: user?.id, attemptedEmail: email.trim() });
+    await audit(req, 'login_failed', { userId: user?.id, practiceId: user?.practice_id, attemptedEmail: email.trim() });
     return res.status(401).json({ error: 'Email or password is incorrect' });
   }
 
   // A fresh session id on login, so an id issued before login can't be reused.
   await promisify(req.session.regenerate).call(req.session);
-  req.session.user = { id: user.id, email: user.email, name: user.name };
+  // The practice comes from the account, never from the request, so a
+  // provider can't ask for another practice's patients.
+  req.session.user = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    practiceId: user.practice_id,
+    practiceName: user.practice_name,
+  };
   await audit(req, 'login');
   res.json(req.session.user);
 }

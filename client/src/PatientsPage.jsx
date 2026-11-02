@@ -154,8 +154,9 @@ export default function PatientsPage({ user, onLogout }) {
             )}
           </div>
           <Group gap="sm">
+            {/* Which practice's patients these are (PRODUCT.md §7). */}
             <Text size="sm" c="dimmed">
-              {user.name}
+              {user.name} · {user.practiceName}
             </Text>
             <Button variant="default" onClick={onLogout}>
               Log out
