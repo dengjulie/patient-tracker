@@ -340,7 +340,9 @@ All routes except `/api/session` return `401` without a valid session.
 - Validation failures return `400` with `{ "errors": { "<dotted.path>": "message" } }`,
   e.g. `"address.postalCode": "Use a 5-digit ZIP (or ZIP+4)"`. The form shows
   each message under the field with that path.
-- Unknown or non-numeric ids return `404`.
+- Unknown or non-numeric ids return `404`, and so do patients entered in
+  error: they can't be read, edited (which would bring them back) or deleted
+  again.
 - A `PUT` whose `If-Match` no longer matches the patient's `updatedAt`
   returns `412`. This is HTTP's (and FHIR's) optimistic locking: no lock is
   held while a form is open, and `updatedAt` serves as the version, compared

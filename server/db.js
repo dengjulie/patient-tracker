@@ -224,8 +224,9 @@ export async function createPatient(patient, db = pool) {
   return toPatient(rows[0]);
 }
 
-// Returns undefined if no patient has this id, or if `ifUpdatedAt` is given
-// and the patient has been saved since then (someone else's edit).
+// Returns undefined if no patient has this id, if it was entered in error
+// (a deleted patient can't be edited back to life), or if `ifUpdatedAt` is
+// given and the patient has been saved since then (someone else's edit).
 // updated_at is compared to the millisecond because that's all the API's
 // JSON timestamps carry; Postgres stores microseconds.
 export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
@@ -233,10 +234,11 @@ export async function updatePatient(id, patient, ifUpdatedAt, db = pool) {
   const { rows } = await db.query(
     `UPDATE patients SET ${assignments}, updated_at = now()
      WHERE id = $${COLUMNS.length + 1}
+       AND status <> $${COLUMNS.length + 3}
        AND ($${COLUMNS.length + 2}::timestamptz IS NULL
             OR date_trunc('milliseconds', updated_at) = $${COLUMNS.length + 2})
      RETURNING *`,
-    [...toRow(patient), id, ifUpdatedAt ?? null]
+    [...toRow(patient), id, ifUpdatedAt ?? null, ENTERED_IN_ERROR]
   );
   return toPatient(rows[0]);
 }
@@ -267,8 +269,9 @@ export async function findPatient(id, db = pool) {
   return toPatient(rows[0]);
 }
 
+// Whether a patient (not entered in error) has this id.
 export async function patientExists(id, db = pool) {
-  const { rowCount } = await db.query(`SELECT 1 FROM patients WHERE id = $1`, [id]);
+  const { rowCount } = await db.query(`SELECT 1 FROM patients WHERE id = $1 AND status <> $2`, [id, ENTERED_IN_ERROR]);
   return rowCount > 0;
 }
 
@@ -289,10 +292,11 @@ export async function setPatientTimestamps(id, { createdAt, updatedAt }, db = po
 }
 
 // "Delete" never erases a medical record. It marks it as entered in error,
-// which hides it from the list (see PRODUCT.md §5).
+// which hides it from the list (see PRODUCT.md §5). Returns false if there's
+// no such patient or it was already deleted.
 export async function markEnteredInError(id, db = pool) {
   const { rowCount } = await db.query(
-    `UPDATE patients SET status = $1, updated_at = now() WHERE id = $2`,
+    `UPDATE patients SET status = $1, updated_at = now() WHERE id = $2 AND status <> $1`,
     [ENTERED_IN_ERROR, id]
   );
   return rowCount > 0;
