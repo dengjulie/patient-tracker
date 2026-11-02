@@ -606,7 +606,7 @@ The design comes from PRODUCT.md §7. In code:
     screen until the next click.
 - **Search:**
   - **Search-first:** until the box holds 2 characters or a status is
-    chosen, the page shows a prompt and sends no request. Results are shown only while the box holds
+    chosen, the page shows nothing below the search row and sends no request. Results are shown only while the box holds
     a long-enough search, so clearing it hides them at once instead of
     after the debounce. The search box has focus on load.
   - **Debounced** by 300 ms (`useDebouncedValue`), which also keeps the audit
@@ -616,7 +616,7 @@ The design comes from PRODUCT.md §7. In code:
   - **No separate loading flag:** each result is stored with the query it
     answers, so "loading" is derived: the newest result is for an older
     query. The previous rows stay visible meanwhile.
-- **Recent patients** (`RecentPatients.jsx`): shown under the search prompt
+- **Recent patients** (`RecentPatients.jsx`): shown under the search row
   only after the provider clicks **Show my recent patients**; typing a
   search, choosing a status or clicking Hide hides it again (a `showRecent`
   flag, cleared in those handlers rather than an effect). It fetches when

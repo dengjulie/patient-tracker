@@ -249,25 +249,18 @@ export default function PatientsPage({ user, onLogout }) {
           </Alert>
         ))}
 
+        {/* Before a search, nothing is shown unless the provider asks for
+            their recent patients (PRODUCT.md §6). */}
         {!askedFor ? (
-          <>
-            <Paper withBorder p="xl" radius="md">
-              <Text ta="center" c="dimmed">
-                {search.trim()
-                  ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
-                  : 'Search by name or date of birth, or choose a status, to find patients.'}
-              </Text>
-            </Paper>
-            {showRecent && (
-              <RecentPatients
-                onLoaded={setRecentCount}
-                refreshKey={refreshCount}
-                statuses={statuses}
-                onOpen={setViewingId}
-                onHide={() => setShowRecent(false)}
-              />
-            )}
-          </>
+          showRecent && (
+            <RecentPatients
+              onLoaded={setRecentCount}
+              refreshKey={refreshCount}
+              statuses={statuses}
+              onOpen={setViewingId}
+              onHide={() => setShowRecent(false)}
+            />
+          )
         ) : patients === null && !error ? (
           <Center py="xl">
             <Loader />
