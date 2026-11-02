@@ -107,20 +107,23 @@ app.get('/api/reference', (req, res) => {
 // the URL, where they'd end up in server logs and browser history.
 // FHIR does the same with POST [base]/Patient/_search.
 // Search-first (PRODUCT.md §6): patients are shown only for a search of at
-// least MIN_SEARCH_LENGTH characters, so there's no way to list everyone.
+// least MIN_SEARCH_LENGTH characters or a status (a worklist, such as the
+// waitlist), so there's no way to list everyone.
 const MIN_SEARCH_LENGTH = 2;
-const searchSchema = z.object({
-  search: z.string().trim().min(MIN_SEARCH_LENGTH),
-  status: z.string().default(''),
-  page: z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(1).max(100).default(25),
-});
+const searchSchema = z
+  .object({
+    search: z.string().trim().default(''),
+    status: z.string().default(''),
+    page: z.number().int().min(1).default(1),
+    pageSize: z.number().int().min(1).max(100).default(25),
+  })
+  .refine((q) => q.status || q.search.length >= MIN_SEARCH_LENGTH);
 
 app.post('/api/patients/_search', async (req, res) => {
   const query = searchSchema.safeParse(req.body ?? {});
   if (!query.success) {
     return res.status(400).json({
-      error: `search must be at least ${MIN_SEARCH_LENGTH} characters; status a string; page and pageSize (max 100) positive integers`,
+      error: `Send a search of at least ${MIN_SEARCH_LENGTH} characters or a status; page and pageSize (max 100) are positive integers`,
     });
   }
   const { patients, total } = await listPatients(query.data);

@@ -134,21 +134,25 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - Typing "maria garcia" finds *Maria Elena Garcia*, because each word is
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
-- **Status filter:** narrows a search. On its own it shows nothing, since
-  that would list a whole category of patients without searching.
+- **Status filter:** works on its own or narrows a search. On its own it
+  is a **worklist**, such as everyone on the waitlist or on hold, which
+  providers need to work through without knowing names. It's still not a
+  list of everyone: one status at a time, and only the page on screen is
+  recorded in the audit log, like any search.
 - **Results sorted by most recently updated first.** Recently added and
   edited patients come first among the matches. We considered alphabetical by last name, the convention in
   clinical patient lists; search covers finding a specific patient by name.
   Letting providers choose (column sorting) is on the Later list.
 - **Search-first: no patients are shown until the provider searches** for
-  at least 2 characters of a name or date of birth. This is how hospital
+  at least 2 characters of a name or date of birth, or chooses a status. This is how hospital
   EHRs (Epic, Cerner) do patient lookup.
   - **Why:** a list of every patient on screen is exposed to anyone passing
     by or using an unlocked screen, and it shows far more patients than the
     provider is working with. HIPAA doesn't require this (the "minimum
     necessary" rule doesn't apply to treatment); it's a choice to show less.
-  - **Enforced by the API**, not just hidden in the browser: a search
-    shorter than 2 characters is refused, so no request can list everyone.
+  - **Enforced by the API**, not just hidden in the browser: a request
+    with neither a 2-character search nor a status is refused, so no request
+    can list everyone.
   - **2 characters** so a single letter can't match almost everyone, while
     short names ("Li", "Ng") still work.
   - **Trade-off:** providers can no longer browse their patient list or see

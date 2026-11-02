@@ -11,7 +11,7 @@ import ImportPatients from './ImportPatients.jsx';
 const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 25;
 // Search-first (PRODUCT.md §6): no patients are shown until the provider types
-// at least this much. The server enforces the same minimum.
+// at least this much or picks a status. The server enforces the same rule.
 const MIN_SEARCH_LENGTH = 2;
 
 // Screen-reader names for the pagination arrows.
@@ -32,10 +32,12 @@ export default function PatientsPage({ user, onLogout }) {
   // Wait until typing pauses before searching, so we don't send (and audit-log)
   // a request on every keystroke.
   const [debouncedSearch] = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
-  const typedEnough = search.trim().length >= MIN_SEARCH_LENGTH;
-  // Results show only while the box holds a long-enough search, so clearing
-  // it hides them at once, without waiting for the debounce.
-  const searching = typedEnough && debouncedSearch.length >= MIN_SEARCH_LENGTH;
+  // A status on its own counts as a search: it's a worklist ("everyone on
+  // the waitlist"), not the whole patient list.
+  const askedFor = Boolean(status) || search.trim().length >= MIN_SEARCH_LENGTH;
+  // Results show only while the provider is asking for them, so clearing the
+  // box hides them at once, without waiting for the debounce.
+  const searching = askedFor && (Boolean(status) || debouncedSearch.length >= MIN_SEARCH_LENGTH);
   const filters = { search: debouncedSearch, status: status ?? '' };
   const filtersKey = JSON.stringify(filters);
 
@@ -76,7 +78,7 @@ export default function PatientsPage({ user, onLogout }) {
     // Cancel the previous search when a new one starts, so a slow, older
     // response can never overwrite a newer one.
     const { query } = JSON.parse(requestKey);
-    if (query.search.length < MIN_SEARCH_LENGTH) return;
+    if (!query.status && query.search.length < MIN_SEARCH_LENGTH) return;
     const controller = new AbortController();
     api('POST', '/patients/_search', { body: query, signal: controller.signal })
       .then((data) => {
@@ -212,12 +214,12 @@ export default function PatientsPage({ user, onLogout }) {
           </Alert>
         ))}
 
-        {!typedEnough ? (
+        {!askedFor ? (
           <Paper withBorder p="xl" radius="md">
             <Text ta="center" c="dimmed">
               {search.trim()
                 ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
-                : 'Search by name or date of birth to find a patient.'}
+                : 'Search by name or date of birth, or choose a status, to find patients.'}
             </Text>
           </Paper>
         ) : patients === null && !error ? (
