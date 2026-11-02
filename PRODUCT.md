@@ -412,6 +412,9 @@ goes on the list below.
     which today mean "no filter" and show the whole log.
   - Refuse `--limit 0`, which today says "No audit entries match."
   - Tests for `listAuditEntries`.
+  - A read-only reviewer login (`SELECT` on `audit_log`, `users`,
+    `practices`) instead of the owner login, so whoever reviews the log
+    can't change or delete it.
 - Warn before closing the form with unsaved changes
 - Column sorting
 - Multiple addresses per patient (home vs mailing) and address history, in a
