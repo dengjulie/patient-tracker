@@ -83,6 +83,26 @@ All endpoints are listed in [ARCHITECTURE.md → API](ARCHITECTURE.md#api).
 To reset the database: `docker compose down -v && docker compose up -d`, then
 `npm run seed`.
 
+### Tests
+
+```bash
+cd server && npm test   # needs Postgres running (docker compose up -d) and server/.env
+cd client && npm test
+```
+
+Both use Node's built-in test runner; there's nothing extra to install.
+
+| Suite | Kind | What it checks |
+| --- | --- | --- |
+| `server/test/isolation.test.js` | Integration (database) | Practice isolation in Postgres itself: row-level security hides other practices even from a query with no practice filter, and sees nothing with no practice set; patients can't be added to or moved into another practice; the app's database role can't hard-delete patients or change or delete audit entries; the role and practice never leak to the next query on a pooled connection. |
+| `server/test/api.test.js` | Integration (API) | Through the real routes, as two providers in two practices: every patient route needs a login; searches, recent patients and CSV import matching stay inside the practice; another practice's patient is "not found" for reading, editing and deleting; audit entries record the practice; two simultaneous saves give one success and one `412`; deleted patients stay deleted; search-first. |
+| `server/test/import.test.js` | Unit | How CSV rows are sorted: invalid, already imported (ignoring case and status), possible duplicates, ready. |
+| `client/test/csvImport.test.js` | Unit | Turning spreadsheet rows into patients: column-name guesses, US dates, ZIPs that lost leading zeros, state names and status labels. |
+
+The integration tests create a throwaway database for each file
+(`patient_tracker_test_<pid>`) and drop it at the end, so they never touch
+development data. They run one file at a time.
+
 ## Project structure
 
 ```
@@ -93,7 +113,8 @@ patient-tracker/
 ├── CLAUDE.md            instructions for Claude Code
 ├── docker-compose.yml   local Postgres
 ├── server/              Express API
-│   ├── index.js         routes and request validation (Zod)
+│   ├── index.js         starts the API
+│   ├── app.js           routes and request validation (Zod)
 │   ├── db.js            schema and every SQL query
 │   ├── import.js        sorts CSV import rows (new, already imported, duplicate, invalid)
 │   ├── audit.js         records audit log entries
@@ -102,6 +123,7 @@ patient-tracker/
 │   ├── seed.js          demo login + fake patients (edge cases and generated)
 │   ├── create-user.js   admin script to add a provider account to a practice
 │   └── .env.example     config template (DATABASE_URL, SESSION_SECRET)
+│   └── test/            unit and integration tests (npm test)
 └── client/              React front end (Vite + Mantine)
     ├── vite.config.js   dev server; proxies /api to Express
     └── src/

@@ -29,7 +29,7 @@ flowchart TB
         Sessions["express-session<br/>cookie to session"]
         SessionRoutes["/api/session (auth.js)<br/>log in, who am I, log out"]
         Guard["requireAuth<br/>401 without a session"]
-        Routes["Patient + reference routes (index.js)<br/>Zod validation, If-Match check<br/>CSV import plan (import.js)"]
+        Routes["Patient + reference routes (app.js)<br/>Zod validation, If-Match check<br/>CSV import plan (import.js)"]
         Audit["audit.js<br/>who, what, which patients"]
         Db["db.js<br/>all SQL, transactions"]
         Sessions --> SessionRoutes
@@ -98,8 +98,10 @@ patient-tracker/
 │   ├── create-user.js  admin script: create a provider account in a practice
 │   ├── db.js           schema + every SQL query (routes contain no SQL)
 │   ├── import.js       sorts CSV import rows: ready, already imported, duplicates, invalid
-│   ├── index.js        Express routes + Zod validation
-│   └── seed.js         demo login + 5 edge-case patients + generated ones (Faker, fixed seed)
+│   ├── index.js        starts the API (initDb, then listen)
+│   ├── app.js          Express routes + Zod validation; exported so tests can use it
+│   ├── seed.js         demo logins + 5 edge-case patients + generated ones (Faker, fixed seed)
+│   └── test/           node:test suites; integration ones use a throwaway database
 └── client/             React front end
     ├── vite.config.js  proxies /api to Express (one origin, so cookies just work)
     └── src/
@@ -489,7 +491,12 @@ before knowing the practice), the session store, and the admin scripts.
 that doesn't exist, so they don't reveal that the patient exists. Import
 duplicate checks and recent patients only look inside the practice too.
 
-**Tested** against the running server, as two providers in two practices:
+**Tested automatically** by `npm test` in `server/`
+([`test/isolation.test.js`](server/test/isolation.test.js) and
+[`test/api.test.js`](server/test/api.test.js); see README → Tests), as two
+providers in two practices. Weakening the policy to `USING (true)` makes the
+two database-only tests fail while the app-filter tests still pass, which
+shows each layer is checked on its own.
 - **Through the API:** reading, editing (with and without `If-Match`) and
   deleting the other practice's patient all return `404`. Searches and
   imports never match across practices.
