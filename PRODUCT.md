@@ -134,16 +134,28 @@ retention laws). A permanent delete also can't be undone after a misclick.
   - Typing "maria garcia" finds *Maria Elena Garcia*, because each word is
     matched separately.
   - Typing "1984" or "03/12/1984" finds patients by DOB.
-- **Status filter:** a filter next to search.
-- **Sorted by most recently updated first.** New and just-edited patients
-  appear at the top, which suits day-to-day work ("who did we just
-  onboard?"). We considered alphabetical by last name, the convention in
+- **Status filter:** narrows a search. On its own it shows nothing, since
+  that would list a whole category of patients without searching.
+- **Results sorted by most recently updated first.** Recently added and
+  edited patients come first among the matches. We considered alphabetical by last name, the convention in
   clinical patient lists; search covers finding a specific patient by name.
   Letting providers choose (column sorting) is on the Later list.
-- **A browsable table** of all patients, not search-only. This is a
-  small-practice tool, and seeing your patient list at a glance is expected
-  (SimplePractice works the same way). Search-first, as in hospital EHRs, is
-  on the Later list for hospital scale.
+- **Search-first: no patients are shown until the provider searches** for
+  at least 2 characters of a name or date of birth. This is how hospital
+  EHRs (Epic, Cerner) do patient lookup.
+  - **Why:** a list of every patient on screen is exposed to anyone passing
+    by or using an unlocked screen, and it shows far more patients than the
+    provider is working with. HIPAA doesn't require this (the "minimum
+    necessary" rule doesn't apply to treatment); it's a choice to show less.
+  - **Enforced by the API**, not just hidden in the browser: a search
+    shorter than 2 characters is refused, so no request can list everyone.
+  - **2 characters** so a single letter can't match almost everyone, while
+    short names ("Li", "Ng") still work.
+  - **Trade-off:** providers can no longer browse their patient list or see
+    recent activity at a glance. A "my recent patients" list (from the audit
+    log's reads) is on the Later list as the convenient middle ground.
+  - This replaces an earlier choice of a browsable table, made because small
+    practices (e.g. SimplePractice) usually show one.
 - **Table columns:** Name · Date of birth (with age) · Status · City, State ·
   Updated. "Updated" makes the sort order visible: recent changes read as
   relative time ("3 hours ago", "yesterday"), older ones as a date ("Oct 12,
@@ -344,7 +356,8 @@ goes on the list below.
   review), plus database-level append-only enforcement, before/after values
   for edits, and a retention policy (commonly 6 years)
 - Warn before closing the form with unsaved changes
-- **Search-first at hospital scale:** no browse-all list, as in hospital EHRs
+- **My recent patients:** a short list of patients this provider opened
+  recently (from the audit log's `read` entries), next to search
 - Column sorting
 - Multiple addresses per patient (home vs mailing) and address history, in a
   separate addresses table

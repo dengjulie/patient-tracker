@@ -106,8 +106,11 @@ app.get('/api/reference', (req, res) => {
 // Search is a POST so names and birth dates travel in the request body, not
 // the URL, where they'd end up in server logs and browser history.
 // FHIR does the same with POST [base]/Patient/_search.
+// Search-first (PRODUCT.md §6): patients are shown only for a search of at
+// least MIN_SEARCH_LENGTH characters, so there's no way to list everyone.
+const MIN_SEARCH_LENGTH = 2;
 const searchSchema = z.object({
-  search: z.string().trim().default(''),
+  search: z.string().trim().min(MIN_SEARCH_LENGTH),
   status: z.string().default(''),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(25),
@@ -116,7 +119,9 @@ const searchSchema = z.object({
 app.post('/api/patients/_search', async (req, res) => {
   const query = searchSchema.safeParse(req.body ?? {});
   if (!query.success) {
-    return res.status(400).json({ error: 'search and status must be strings; page and pageSize (max 100) positive integers' });
+    return res.status(400).json({
+      error: `search must be at least ${MIN_SEARCH_LENGTH} characters; status a string; page and pageSize (max 100) positive integers`,
+    });
   }
   const { patients, total } = await listPatients(query.data);
   // Logged before responding: if the audit write fails, no results are sent.

@@ -320,7 +320,7 @@ code. It's listed so the whole database is documented in one place.
 | GET | `/api/session` | The logged-in user, or `401`. The front end calls it on page load. |
 | DELETE | `/api/session` | Log out. Returns `204`. |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
-| POST | `/api/patients/_search` | One page of patients, excluding entered-in-error. Body (all optional): `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }` (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
+| POST | `/api/patients/_search` | One page of matching patients, excluding entered-in-error. Body: `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }`. `search` is required, at least 2 characters (search-first); the rest are optional (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
 | GET | `/api/patients/:id` | One patient's full record, for the patient view. Logged as a `read` before responding. `404` if unknown or entered in error. |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. Send `If-Match: "<updatedAt>"` (the value the editor loaded) to refuse the save if someone changed the patient since; the form always does. |
@@ -346,6 +346,9 @@ All routes except `/api/session` return `401` without a valid session.
   server, proxy and monitoring logs. Names and birth dates there would leak
   patient data. FHIR defines `POST [base]/Patient/_search` for the same
   reason, and we borrow its path.
+- **Search-first:** a `search` under 2 characters (after trimming) is a
+  `400`, with or without a status, so the API can't be used to list every
+  patient.
 - Search is done on the server. The query is split into words, and **every
   word** must appear in one of: the full name, the preferred name, or the
   birth date (ISO or MM/DD/YYYY).
@@ -460,6 +463,10 @@ The design comes from PRODUCT.md §7. In code:
   - Without it, the server would end the session but data would stay on
     screen until the next click.
 - **Search:**
+  - **Search-first:** until the box holds 2 characters, the page shows a
+    prompt and sends no request. Results are shown only while the box holds
+    a long-enough search, so clearing it hides them at once instead of
+    after the debounce. The search box has focus on load.
   - **Debounced** by 300 ms (`useDebouncedValue`), which also keeps the audit
     log to one entry per pause in typing, not per keystroke.
   - **Out-of-order safe:** each new search cancels the previous request

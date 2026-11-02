@@ -10,6 +10,9 @@ import ImportPatients from './ImportPatients.jsx';
 
 const SEARCH_DELAY_MS = 300;
 const PAGE_SIZE = 25;
+// Search-first (PRODUCT.md §6): no patients are shown until the provider types
+// at least this much. The server enforces the same minimum.
+const MIN_SEARCH_LENGTH = 2;
 
 // Screen-reader names for the pagination arrows.
 const PAGINATION_LABELS = { first: 'First page', previous: 'Previous page', next: 'Next page', last: 'Last page' };
@@ -29,6 +32,10 @@ export default function PatientsPage({ user, onLogout }) {
   // Wait until typing pauses before searching, so we don't send (and audit-log)
   // a request on every keystroke.
   const [debouncedSearch] = useDebouncedValue(search.trim(), SEARCH_DELAY_MS);
+  const typedEnough = search.trim().length >= MIN_SEARCH_LENGTH;
+  // Results show only while the box holds a long-enough search, so clearing
+  // it hides them at once, without waiting for the debounce.
+  const searching = typedEnough && debouncedSearch.length >= MIN_SEARCH_LENGTH;
   const filters = { search: debouncedSearch, status: status ?? '' };
   const filtersKey = JSON.stringify(filters);
 
@@ -50,9 +57,9 @@ export default function PatientsPage({ user, onLogout }) {
   // Each result remembers which request it answers. We're loading whenever the
   // latest result is for an older request; the old rows stay visible meanwhile.
   const [result, setResult] = useState({ requestKey: null, data: null, error: '' });
-  const loading = result.requestKey !== requestKey;
-  const { error } = result;
-  const patients = result.data?.patients ?? null;
+  const loading = searching && result.requestKey !== requestKey;
+  const error = searching ? result.error : '';
+  const patients = searching ? (result.data?.patients ?? null) : null;
   const total = result.data?.total ?? 0;
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
@@ -68,8 +75,9 @@ export default function PatientsPage({ user, onLogout }) {
   useEffect(() => {
     // Cancel the previous search when a new one starts, so a slow, older
     // response can never overwrite a newer one.
-    const controller = new AbortController();
     const { query } = JSON.parse(requestKey);
+    if (query.search.length < MIN_SEARCH_LENGTH) return;
+    const controller = new AbortController();
     api('POST', '/patients/_search', { body: query, signal: controller.signal })
       .then((data) => {
         setResult({ requestKey, data, error: '' });
@@ -116,7 +124,6 @@ export default function PatientsPage({ user, onLogout }) {
   }
 
   const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
-  const filtering = Boolean(filters.search || filters.status);
   const firstShown = (page - 1) * PAGE_SIZE + 1;
   const lastShown = firstShown + (patients?.length ?? 0) - 1;
 
@@ -130,8 +137,7 @@ export default function PatientsPage({ user, onLogout }) {
             </Title>
             {patients && (
               <Text c="dimmed" size="sm">
-                {total} {total === 1 ? 'patient' : 'patients'}
-                {filtering && ' found'}
+                {total} {total === 1 ? 'patient' : 'patients'} found
               </Text>
             )}
           </div>
@@ -186,6 +192,7 @@ export default function PatientsPage({ user, onLogout }) {
             placeholder="Name or date of birth (MM/DD/YYYY)"
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
+            autoFocus
             rightSection={loading && patients ? <Loader size="xs" /> : null}
             style={{ flexGrow: 3 }}
           />
@@ -205,14 +212,22 @@ export default function PatientsPage({ user, onLogout }) {
           </Alert>
         ))}
 
-        {patients === null && !error ? (
+        {!typedEnough ? (
+          <Paper withBorder p="xl" radius="md">
+            <Text ta="center" c="dimmed">
+              {search.trim()
+                ? `Keep typing: enter at least ${MIN_SEARCH_LENGTH} characters.`
+                : 'Search by name or date of birth to find a patient.'}
+            </Text>
+          </Paper>
+        ) : patients === null && !error ? (
           <Center py="xl">
             <Loader />
           </Center>
         ) : patients?.length === 0 ? (
           <Paper withBorder p="xl" radius="md">
             <Text ta="center" c="dimmed">
-              {filtering ? 'No patients match your search.' : 'No patients yet.'}
+              No patients match your search.
             </Text>
           </Paper>
         ) : (
