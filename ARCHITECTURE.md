@@ -390,7 +390,7 @@ created by `initDb`, because the app login can't create tables.
 | DELETE | `/api/session` | Log out. Returns `204`. |
 | GET | `/api/reference` | Status list (with labels + descriptions) and US states for the form's dropdowns, so the client has no duplicate copy. |
 | POST | `/api/patients/_search` | One page of matching patients, excluding entered-in-error. Body: `{ "search": "maria", "status": "active", "page": 1, "pageSize": 25 }`. Needs a `search` of at least 2 characters or a `status` (search-first); the rest are optional (`pageSize` max 100). Returns `{ patients, total, page, pageSize }`. A POST so patient details stay out of URLs (see below). |
-| GET | `/api/patients/_recent` | The 10 patients the logged-in provider most recently opened (`read`), added or edited in the last 30 days, from their audit entries, most recent first. Returns `{ patients }`; logged as a `query`. Declared before `/:id`. |
+| GET | `/api/patients/_recent` | The 10 patients the logged-in provider most recently opened (`read`), added or edited in the last 30 days, from their audit entries, most recent first. Returns `{ patients }`, each with `viewedAt` (the provider's latest open, add or edit); logged as a `query`. Declared before `/:id`. |
 | GET | `/api/patients/:id` | One patient's full record, for the patient view. Logged as a `read` before responding. `404` if unknown or entered in error. |
 | POST | `/api/patients` | Create. Returns `201` + patient. |
 | PUT | `/api/patients/:id` | Replace. Returns the updated patient. Send `If-Match: "<updatedAt>"` (the value the editor loaded) to refuse the save if someone changed the patient since; the form always does. |
@@ -621,9 +621,9 @@ The design comes from PRODUCT.md §7. In code:
   search, choosing a status or clicking Hide hides it again (a `showRecent`
   flag, cleared in those handlers rather than an effect). It fetches when
   shown and again after a save (the list's refresh counter). It uses the
-  same `PatientTable` as the search results, with `showUpdated={false}`:
-  the list is in viewing order, so an Updated column would look like a
-  sort that isn't followed.
+  same `PatientTable` as the search results, with `time="viewed"`: its last
+  column shows `viewedAt` ("Viewed") instead of `updatedAt` ("Updated"), so
+  the time shown always matches the list's order.
 - **Side panel** (`PatientDrawer.jsx`): one Mantine `Drawer` for viewing,
   adding and editing. `PatientsPage` holds two pieces of state: `viewingId`
   (the patient shown) and `editing` (`undefined` = no form, `null` = adding,

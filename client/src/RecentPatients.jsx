@@ -53,7 +53,7 @@ export default function RecentPatients({ refreshKey, statuses, onOpen, onHide, o
           No patients opened, added or edited in the last 30 days.
         </Text>
       ) : (
-        <PatientTable patients={patients} statuses={statuses} onOpen={onOpen} showUpdated={false} />
+        <PatientTable patients={patients} statuses={statuses} onOpen={onOpen} time="viewed" />
       )}
     </Stack>
   );

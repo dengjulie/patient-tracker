@@ -220,4 +220,7 @@ test('the patient just opened is first in recent patients, even if others were u
   assert.equal(patients.length, 10);
   assert.equal(patients[0].id, alpha.id, 'most recently opened first');
   assert.equal(patients[1].name.given[0], 'New10', 'then the most recently added');
+  const viewed = patients.map((p) => p.viewedAt);
+  assert.ok(viewed.every(Boolean), 'each has when it was last viewed');
+  assert.deepEqual(viewed, [...viewed].sort().reverse(), 'and the list follows it, newest first');
 });

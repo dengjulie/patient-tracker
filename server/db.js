@@ -445,11 +445,12 @@ export async function updatePatient(db, id, patient, ifUpdatedAt) {
 }
 
 // The `limit` patients this provider most recently opened, added or edited
-// in the last `days` days, the most recent first. Built from their own audit
-// entries, which already record exactly this.
+// in the last `days` days, the most recent first, each with `viewedAt`: when
+// that last happened. Built from their own audit entries, which already
+// record exactly this.
 export async function listRecentPatients(db, userId, { limit = 10, days = 30 } = {}) {
   const { rows } = await db.query(
-    `SELECT patients.* FROM patients
+    `SELECT patients.*, activity.last_activity FROM patients
      JOIN (
        SELECT patient_id, max(occurred_at) AS last_activity
        FROM audit_log, unnest(patient_ids) AS patient_id
@@ -463,7 +464,7 @@ export async function listRecentPatients(db, userId, { limit = 10, days = 30 } =
      LIMIT $5`,
     [userId, days, db.practiceId, ENTERED_IN_ERROR, limit]
   );
-  return rows.map(toPatient);
+  return rows.map((row) => ({ ...toPatient(row), viewedAt: row.last_activity }));
 }
 
 // One patient, unless it was entered in error (hidden everywhere, like the list).

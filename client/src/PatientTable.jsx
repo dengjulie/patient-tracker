@@ -3,9 +3,16 @@ import { STATUS_COLORS, age, displayName, formatDate, formatTimestamp, formatUpd
 
 // The patient table, for search results and recent patients. Shows only what
 // providers need to pick the right patient: no street address (PRODUCT.md §6).
-// `showUpdated` is off for recent patients: they're in viewing order, so an
-// Updated column would look like a sort that isn't followed.
-export default function PatientTable({ patients, statuses, onOpen, showUpdated = true }) {
+// The last column is a time that matches the list's order: when the record
+// was updated (search results), or when the provider last viewed it (recent
+// patients, `time="viewed"`).
+const TIME_COLUMNS = {
+  updated: { label: 'Updated', field: 'updatedAt' },
+  viewed: { label: 'Viewed', field: 'viewedAt' },
+};
+
+export default function PatientTable({ patients, statuses, onOpen, time: timeName = 'updated' }) {
+  const time = TIME_COLUMNS[timeName];
   const statusLabel = (code) => statuses.find((s) => s.code === code)?.label ?? code;
 
   return (
@@ -18,7 +25,7 @@ export default function PatientTable({ patients, statuses, onOpen, showUpdated =
               <Table.Th>Date of birth</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th>City, State</Table.Th>
-              {showUpdated && <Table.Th>Updated</Table.Th>}
+              <Table.Th>{time.label}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -46,13 +53,11 @@ export default function PatientTable({ patients, statuses, onOpen, showUpdated =
                 <Table.Td>
                   {patient.address.city}, {patient.address.state}
                 </Table.Td>
-                {showUpdated && (
-                  <Table.Td c="dimmed" fz="sm">
-                    <time dateTime={patient.updatedAt} title={formatTimestamp(patient.updatedAt)}>
-                      {formatUpdated(patient.updatedAt)}
-                    </time>
-                  </Table.Td>
-                )}
+                <Table.Td c="dimmed" fz="sm">
+                  <time dateTime={patient[time.field]} title={formatTimestamp(patient[time.field])}>
+                    {formatUpdated(patient[time.field])}
+                  </time>
+                </Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
