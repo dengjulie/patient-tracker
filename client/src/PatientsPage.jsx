@@ -139,6 +139,13 @@ export default function PatientsPage({ user, onLogout }) {
     reload();
   }
 
+  // The count under the heading: matches for a search, or recent patients.
+  const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  const headingCount = patients
+    ? `${plural(total, 'patient')} found`
+    : !askedFor && showRecent && recentCount !== null
+      ? plural(recentCount, 'recent patient')
+      : null;
   const firstShown = (page - 1) * PAGE_SIZE + 1;
   const lastShown = firstShown + (patients?.length ?? 0) - 1;
 
@@ -150,19 +157,11 @@ export default function PatientsPage({ user, onLogout }) {
             <Title order={1} size="h2">
               Patients
             </Title>
-            {patients ? (
-              <Text c="dimmed" size="sm">
-                {total} {total === 1 ? 'patient' : 'patients'} found
-              </Text>
-            ) : (
-              !askedFor &&
-              showRecent &&
-              recentCount !== null && (
-                <Text c="dimmed" size="sm">
-                  {recentCount} recent {recentCount === 1 ? 'patient' : 'patients'}
-                </Text>
-              )
-            )}
+            {/* Always rendered, holding a non-breaking space when there's no
+                count, so the page doesn't shift down when one appears. */}
+            <Text c="dimmed" size="sm">
+              {headingCount ?? '\u00A0'}
+            </Text>
           </div>
           <Group gap="sm">
             {/* Which practice's patients these are (PRODUCT.md §7). */}
