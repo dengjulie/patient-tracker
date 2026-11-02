@@ -127,8 +127,8 @@ retention laws). A permanent delete also can't be undone after a misclick.
 
 ## 6. Viewing and finding patients
 
-- **Layout:** one screen, with a patient table and a modal form for adding and
-  editing. The table stays in view while working.
+- **Layout:** one screen: the patient table, and a **side panel** that
+  shows, adds or edits one patient. The table stays in view while working.
 - **Search:** covers **names (including preferred name) and date of birth
   only**. It ignores case and accents: "jose munoz" finds *José Muñoz*.
   - Typing "maria garcia" finds *Maria Elena Garcia*, because each word is
@@ -188,9 +188,10 @@ retention laws). A permanent delete also can't be undone after a misclick.
   address, and when the record was added and last updated. The list stays in
   place behind it, as in HubSpot's or Linear's record previews and many EHR
   patient lists, so providers can check a patient and get back to where they
-  were. An **Edit** button opens the edit form; the drawer steps aside while
-  it's open and returns, updated, after saving. Seeing a record and changing
-  it are separate, so a look can't turn into an accidental edit.
+  were. An **Edit** button switches the same panel to the edit form;
+  Cancel (or Escape, or the close button) returns to the patient, and saving
+  returns to the patient, updated. Seeing a record and changing it are
+  separate steps, so a look can't turn into an accidental edit.
   - Not a separate page with its own URL: that would need a router and would
     put patient ids in browser history and logs, which we avoid for search
     terms too.
@@ -200,8 +201,10 @@ retention laws). A permanent delete also can't be undone after a misclick.
   to page 1. Paging happens on the server, so the browser never loads the
   whole patient list. That keeps it fast at hospital scale and means only
   the patients actually shown are recorded as viewed in the audit log.
-- **Adding and editing:** an "Add patient" button, or **Edit** in the
-  patient view.
+- **Adding and editing:** in the same side panel. "Add patient" opens it
+  with an empty form; after saving, the panel shows the new patient (logged
+  as a read, like any open), so the provider can check what was saved.
+  **Edit** in the patient view switches the panel to the form.
   - **Name labels:** "First (given) name", "Middle name(s)" and "Last (family)
     name": familiar words, with the FHIR meaning in brackets. Under the last
     name: "Leave blank if the patient has only one name."
@@ -217,7 +220,8 @@ retention laws). A permanent delete also can't be undone after a misclick.
     patient again to see their changes." Nobody's changes are silently
     overwritten. This is FHIR's version check (`If-Match`). Merging the two
     edits automatically is more than a small practice needs.
-  - **Accidental closing:** clicking outside the modal doesn't close it, so a
+  - **Accidental closing:** clicking outside the panel while the form is
+    open doesn't close it, so a
     stray click can't throw away what was typed. While a save or delete is
     in progress the form can't be closed at all, so nobody thinks they
     cancelled a change that then goes through.

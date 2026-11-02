@@ -12,7 +12,7 @@ flowchart TB
         App["App.jsx<br/>login page or patients page"]
         Login["LoginPage.jsx"]
         List["PatientsPage.jsx<br/>table, search, filter, paging"]
-        View["PatientDrawer.jsx<br/>read-only patient view"]
+        View["PatientDrawer.jsx<br/>side panel: view, add, edit"]
         Recent["RecentPatients.jsx<br/>your recent patients"]
         Form["PatientForm.jsx<br/>add, edit, delete"]
         Import["ImportPatients.jsx<br/>CSV: map columns, review, import"]
@@ -106,10 +106,10 @@ patient-tracker/
         ├── App.jsx           login page vs patients page; session-end messages
         ├── LoginPage.jsx
         ├── PatientsPage.jsx  table, debounced search, status filter, paging
-        ├── PatientDrawer.jsx read-only patient view (side drawer); logs a read
+        ├── PatientDrawer.jsx side panel: patient view, or the add/edit form; logs a read
         ├── PatientTable.jsx  patient table, shared by search results and recent patients
         ├── RecentPatients.jsx the provider's recent patients, before searching
-        ├── PatientForm.jsx   add/edit modal, delete confirmation
+        ├── PatientForm.jsx   add/edit form (shown in the side panel), delete confirmation
         ├── ImportPatients.jsx CSV import modal: choose file, map columns, review
         ├── csvImport.js      CSV row -> API patient; column-name guesses; date/ZIP/state fixes
         ├── api.js            every backend call; browser-side idle logoff
@@ -493,21 +493,29 @@ The design comes from PRODUCT.md §7. In code:
   flag, cleared in those handlers rather than an effect). It fetches when
   shown and again after a save (the list's refresh counter). It uses the same `PatientTable` as the
   search results.
-- **Patient view** (`PatientDrawer.jsx`): a Mantine `Drawer`.
+- **Side panel** (`PatientDrawer.jsx`): one Mantine `Drawer` for viewing,
+  adding and editing. `PatientsPage` holds two pieces of state: `viewingId`
+  (the patient shown) and `editing` (`undefined` = no form, `null` = adding,
+  a patient = editing it). The panel shows the form whenever `editing` is
+  set, and the patient's details otherwise.
   - **Fetched, not reused:** the list already holds each patient, but the
-    drawer calls `GET /api/patients/:id` so opening it is logged as a `read`.
+    panel calls `GET /api/patients/:id` so opening it is logged as a `read`.
     The fresh copy also carries the latest `updatedAt`, which **Edit** passes
     to the form for its conflict check.
-  - **Hidden while editing:** the drawer closes while the edit form is open
-    and comes back afterwards. With both open, Escape closed both, and the
-    drawer sat above the form's dimmed backdrop. It stays mounted while
-    hidden, so cancelling an edit doesn't re-fetch (or log another read).
-  - **Refreshes after a save** using the list's refresh counter, so it shows
-    the saved values. A delete closes it.
+  - **The panel owns the fetch,** not the details view, so switching to the
+    form and back doesn't fetch again (or log another read).
+  - **Closing:** from the edit form, Escape or the close button returns to
+    the patient, like Cancel; otherwise it closes the panel. Click-outside is
+    off while the form is open, and closing is off while saving. The panel
+    owns that `submitting` flag and passes it to the form.
+  - **After a save** the panel shows the saved patient (for a new one,
+    `viewingId` becomes its id) and refreshes with the list's refresh
+    counter. A delete closes it.
   - In development, React's StrictMode runs effects twice, so one open logs
     two reads (the first request is cancelled in the browser after the
     server has logged it). Production builds don't.
-- **Add/edit form** (`PatientForm.jsx`, `@mantine/form`):
+- **Add/edit form** (`PatientForm.jsx`, `@mantine/form`), rendered inside
+  the side panel:
   - **Familiar fields, FHIR payload:** the form uses first/middle and
     street/unit fields; `toFormValues` / `toPayload` convert to and from the
     API's `name.given[]` and `address.line[]`. The first name stays whole

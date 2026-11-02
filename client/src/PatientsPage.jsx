@@ -4,7 +4,6 @@ import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { api } from './api.js';
 import { displayName } from './format.js';
-import PatientForm from './PatientForm.jsx';
 import PatientDrawer from './PatientDrawer.jsx';
 import PatientTable from './PatientTable.jsx';
 import RecentPatients from './RecentPatients.jsx';
@@ -23,9 +22,10 @@ export default function PatientsPage({ user, onLogout }) {
   const [reference, setReference] = useState({ statuses: [], states: [] });
   const { statuses } = reference;
   const [referenceError, setReferenceError] = useState('');
-  // undefined = form closed, null = adding a patient, object = editing that patient
+  // The side panel shows the patient being viewed, or the form when editing:
+  // editing is undefined = no form, null = adding a patient, object = editing it.
+  const [viewingId, setViewingId] = useState(null);
   const [editing, setEditing] = useState(undefined);
-  const [viewingId, setViewingId] = useState(null); // the patient open in the view, if any
   const [importing, setImporting] = useState(false);
   // Bumped after a save or delete to reload the list, even if the query is unchanged.
   const [refreshCount, setRefreshCount] = useState(0);
@@ -107,15 +107,21 @@ export default function PatientsPage({ user, onLogout }) {
     setRefreshCount((n) => n + 1);
   }
 
+  function closePanel() {
+    setEditing(undefined);
+    setViewingId(null);
+  }
+
+  // The panel goes back to (or, for a new patient, on to) the patient's view.
   function handleSaved(patient, isNew) {
     setEditing(undefined);
+    setViewingId(patient.id);
     notifications.show({ color: 'green', title: isNew ? 'Patient added' : 'Changes saved', message: displayName(patient) });
     reload();
   }
 
   function handleDeleted(patient) {
-    setEditing(undefined);
-    setViewingId(null);
+    closePanel();
     notifications.show({ title: 'Patient deleted', message: `${displayName(patient)} was marked as entered in error.` });
     reload();
   }
@@ -163,28 +169,20 @@ export default function PatientsPage({ user, onLogout }) {
           </Group>
         </Group>
 
-        {/* The form needs the status and state lists for its dropdowns. */}
-        {editing !== undefined && statuses.length > 0 && (
-          <PatientForm
-            patient={editing}
+        {/* The side panel: view, edit or add. It needs the status and state
+            lists for the form's dropdowns. */}
+        {(viewingId !== null || editing !== undefined) && statuses.length > 0 && (
+          <PatientDrawer
+            patientId={viewingId}
+            editing={editing}
+            refreshKey={refreshCount}
             reference={reference}
-            onClose={() => setEditing(undefined)}
+            onEdit={setEditing}
+            onCancelEdit={() => setEditing(undefined)}
+            onClose={closePanel}
             onSaved={handleSaved}
             onDeleted={handleDeleted}
             onStale={reload}
-          />
-        )}
-
-        {/* Hidden while the edit form is open, so Escape closes only the form;
-            it slides back afterwards. Reloads with the list after a save. */}
-        {viewingId !== null && (
-          <PatientDrawer
-            opened={editing === undefined}
-            patientId={viewingId}
-            refreshKey={refreshCount}
-            statuses={statuses}
-            onEdit={setEditing}
-            onClose={() => setViewingId(null)}
           />
         )}
 

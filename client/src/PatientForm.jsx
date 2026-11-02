@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Alert, Button, Fieldset, Group, Modal, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { Alert, Button, Fieldset, Group, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useMediaQuery } from '@mantine/hooks';
 import { api } from './api.js';
 
 const EMPTY_FORM = {
@@ -90,13 +89,13 @@ function today() {
 // provider's own name or address.
 const NO_AUTOFILL = { autoComplete: 'off', 'data-1p-ignore': true, 'data-lpignore': 'true' };
 
+// The add/edit form, shown in the patient side panel (PatientDrawer).
 // `patient` is the patient being edited, or null to add a new one.
+// `submitting` lives in the panel, which can't be closed while it's true.
 // `onStale` is called when the list's copy of the patient is out of date.
-export default function PatientForm({ patient, reference, onClose, onSaved, onDeleted, onStale }) {
+export default function PatientForm({ patient, reference, submitting, setSubmitting, onCancel, onSaved, onDeleted, onStale }) {
   const isNew = patient === null;
-  const isMobile = useMediaQuery('(max-width: 48em)');
   const form = useForm({ initialValues: isNew ? EMPTY_FORM : toFormValues(patient) });
-  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -127,6 +126,7 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
             // Refused if someone saved this patient after we loaded it.
             headers: { 'If-Match': `"${patient.updatedAt}"` },
           });
+      setSubmitting(false);
       onSaved(saved, isNew);
     } catch (err) {
       if (err.status === 400 && err.body?.errors) {
@@ -151,6 +151,7 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
     setFormError('');
     try {
       await api('DELETE', `/patients/${patient.id}`);
+      setSubmitting(false);
       onDeleted(patient);
     } catch (err) {
       showRequestError(err);
@@ -163,124 +164,111 @@ export default function PatientForm({ patient, reference, onClose, onSaved, onDe
   const selectedStatus = reference.statuses.find((s) => s.code === form.values.status);
 
   return (
-    <Modal
-      opened
-      onClose={onClose}
-      title={<Text fw={600} size="lg">{isNew ? 'Add patient' : 'Edit patient'}</Text>}
-      size="lg"
-      fullScreen={isMobile}
-      closeOnClickOutside={false} // a stray click shouldn't throw away typing
-      // While saving or deleting, the form can't be closed: the change would
-      // still go through, and an error would have nowhere to show.
-      closeOnEscape={!submitting}
-      closeButtonProps={{ disabled: submitting }}
-    >
-      <form onSubmit={form.onSubmit(handleSubmit)} noValidate>
-        <Stack gap="lg">
-          {formError && (
-            <Alert color="red" variant="light">
-              {formError}
-            </Alert>
-          )}
+    <form onSubmit={form.onSubmit(handleSubmit)} noValidate>
+      <Stack gap="lg">
+        {formError && (
+          <Alert color="red" variant="light">
+            {formError}
+          </Alert>
+        )}
 
-          <Fieldset legend="Name" variant="unstyled">
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <TextInput label="First (given) name" withAsterisk data-autofocus {...field('name.first')} />
-              <TextInput label="Middle name(s)" {...field('name.middle')} />
-              <TextInput
-                label="Last (family) name"
-                description="Leave blank if the patient has only one name."
-                {...field('name.family')}
-              />
-              <TextInput label="Suffix" placeholder="Jr., III" {...field('name.suffix')} />
-              <TextInput label="Prefix" placeholder="Dr., Mx." {...field('name.prefix')} />
-              <TextInput
-                label="Preferred name"
-                description="What the patient likes to be called."
-                {...field('preferredName')}
-              />
-            </SimpleGrid>
-          </Fieldset>
+        <Fieldset legend="Name" variant="unstyled">
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            <TextInput label="First (given) name" withAsterisk data-autofocus {...field('name.first')} />
+            <TextInput label="Middle name(s)" {...field('name.middle')} />
+            <TextInput
+              label="Last (family) name"
+              description="Leave blank if the patient has only one name."
+              {...field('name.family')}
+            />
+            <TextInput label="Suffix" placeholder="Jr., III" {...field('name.suffix')} />
+            <TextInput label="Prefix" placeholder="Dr., Mx." {...field('name.prefix')} />
+            <TextInput
+              label="Preferred name"
+              description="What the patient likes to be called."
+              {...field('preferredName')}
+            />
+          </SimpleGrid>
+        </Fieldset>
 
-          <Fieldset legend="Details" variant="unstyled">
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <TextInput label="Date of birth" type="date" max={today()} withAsterisk {...field('birthDate')} />
-              <Select
-                label="Status"
-                withAsterisk
-                allowDeselect={false}
-                data={reference.statuses.map((s) => ({ value: s.code, label: s.label }))}
-                description={selectedStatus?.description}
-                renderOption={({ option }) => (
-                  <div>
-                    <Text size="sm">{option.label}</Text>
-                    <Text size="xs" c="dimmed">
-                      {reference.statuses.find((s) => s.code === option.value)?.description}
-                    </Text>
-                  </div>
-                )}
-                {...field('status')}
-              />
-            </SimpleGrid>
-          </Fieldset>
-
-          <Fieldset legend="Address" variant="unstyled">
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <TextInput label="Street" withAsterisk {...field('address.street')} />
-              <TextInput label="Apt / unit" {...field('address.unit')} />
-              <TextInput label="City" withAsterisk {...field('address.city')} />
-              <SimpleGrid cols={2}>
-                <Select
-                  label="State"
-                  withAsterisk
-                  searchable
-                  nothingFoundMessage="No matching state"
-                  data={reference.states.map((s) => ({ value: s.code, label: `${s.code} — ${s.name}` }))}
-                  {...field('address.state')}
-                />
-                <TextInput label="ZIP" withAsterisk inputMode="numeric" {...field('address.postalCode')} />
-              </SimpleGrid>
-            </SimpleGrid>
-          </Fieldset>
-
-          {confirmingDelete ? (
-            <Alert color="red" variant="light" title="Delete this patient?">
-              <Stack gap="sm">
-                <Text size="sm">
-                  Use this only for records created by mistake. The record is kept for auditing but hidden from the
-                  list. If care has ended, set the status to Finished instead.
-                </Text>
-                <Group justify="flex-end">
-                  <Button variant="default" onClick={() => setConfirmingDelete(false)} disabled={submitting}>
-                    Keep patient
-                  </Button>
-                  <Button color="red" onClick={handleDelete} loading={submitting}>
-                    Delete patient
-                  </Button>
-                </Group>
-              </Stack>
-            </Alert>
-          ) : (
-            <Group justify="space-between">
-              {isNew ? (
-                <span />
-              ) : (
-                <Button variant="subtle" color="red" onClick={() => setConfirmingDelete(true)} disabled={submitting}>
-                  Delete
-                </Button>
+        <Fieldset legend="Details" variant="unstyled">
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            <TextInput label="Date of birth" type="date" max={today()} withAsterisk {...field('birthDate')} />
+            <Select
+              label="Status"
+              withAsterisk
+              allowDeselect={false}
+              data={reference.statuses.map((s) => ({ value: s.code, label: s.label }))}
+              description={selectedStatus?.description}
+              renderOption={({ option }) => (
+                <div>
+                  <Text size="sm">{option.label}</Text>
+                  <Text size="xs" c="dimmed">
+                    {reference.statuses.find((s) => s.code === option.value)?.description}
+                  </Text>
+                </div>
               )}
-              <Group>
-                <Button variant="default" onClick={onClose} disabled={submitting}>
-                  Cancel
+              {...field('status')}
+            />
+          </SimpleGrid>
+        </Fieldset>
+
+        <Fieldset legend="Address" variant="unstyled">
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            <TextInput label="Street" withAsterisk {...field('address.street')} />
+            <TextInput label="Apt / unit" {...field('address.unit')} />
+            <TextInput label="City" withAsterisk {...field('address.city')} />
+            <SimpleGrid cols={2}>
+              <Select
+                label="State"
+                withAsterisk
+                searchable
+                nothingFoundMessage="No matching state"
+                data={reference.states.map((s) => ({ value: s.code, label: `${s.code} — ${s.name}` }))}
+                {...field('address.state')}
+              />
+              <TextInput label="ZIP" withAsterisk inputMode="numeric" {...field('address.postalCode')} />
+            </SimpleGrid>
+          </SimpleGrid>
+        </Fieldset>
+
+        {confirmingDelete ? (
+          <Alert color="red" variant="light" title="Delete this patient?">
+            <Stack gap="sm">
+              <Text size="sm">
+                Use this only for records created by mistake. The record is kept for auditing but hidden from the
+                list. If care has ended, set the status to Finished instead.
+              </Text>
+              <Group justify="flex-end">
+                <Button variant="default" onClick={() => setConfirmingDelete(false)} disabled={submitting}>
+                  Keep patient
                 </Button>
-                <Button type="submit" loading={submitting}>
-                  {isNew ? 'Add patient' : 'Save changes'}
+                <Button color="red" onClick={handleDelete} loading={submitting}>
+                  Delete patient
                 </Button>
               </Group>
+            </Stack>
+          </Alert>
+        ) : (
+          <Group justify="space-between">
+            {isNew ? (
+              <span />
+            ) : (
+              <Button variant="subtle" color="red" onClick={() => setConfirmingDelete(true)} disabled={submitting}>
+                Delete
+              </Button>
+            )}
+            <Group>
+              <Button variant="default" onClick={onCancel} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={submitting}>
+                {isNew ? 'Add patient' : 'Save changes'}
+              </Button>
             </Group>
-          )}
-        </Stack>
-      </form>
-    </Modal>
+          </Group>
+        )}
+      </Stack>
+    </form>
   );
 }
