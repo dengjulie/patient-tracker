@@ -183,7 +183,7 @@ The server never connects as a superuser. There are two logins, from
 
 | Login | Env var | Used by | Can |
 | --- | --- | --- | --- |
-| `postgres` (owner) | `DATABASE_OWNER_URL` | `npm run migrate` (and `npm run dev`, which runs it first), `seed.js`, `create-user.js`, the tests' setup | Everything: owns the tables. |
+| `postgres` (owner) | `DATABASE_OWNER_URL` | `npm run migrate` (and `npm run dev`, which runs it first), `seed.js`, `create-user.js`, `audit-log.js` (reads every practice's audit entries), the tests' setup | Everything: owns the tables. |
 | `patient_tracker_app` | `DATABASE_URL` | The running API, for every request | `SELECT, INSERT, UPDATE` on `patients` (own practice only, by row-level security); `SELECT, INSERT` on `audit_log`; `SELECT` on `users`, `practices`; read/write `session`. Nothing else: no `DELETE` on patients, no changing or deleting audit entries, no creating accounts, tables or roles, no switching off row-level security. |
 
 - **Why:** if the server were compromised (a stolen `.env`, an injection bug,
